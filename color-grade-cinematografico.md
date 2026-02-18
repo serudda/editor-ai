@@ -16,7 +16,7 @@
 **Comando:**
 
 ```bash
-ffmpeg -i fuente/video/video_denoised.mp4 \
+ffmpeg -i fuente/video/video.mp4 \
   -vf "
     curves=
       master='0/0.04 0.25/0.22 0.5/0.50 0.75/0.73 1/0.92':
