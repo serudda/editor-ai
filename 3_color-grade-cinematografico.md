@@ -16,7 +16,7 @@
 **Comando:**
 
 ```bash
-ffmpeg -i fuente/video/video.mp4 \
+ffmpeg -i fuente/video/2_video_denoised.mp4 \
   -vf "
     curves=
       master='0/0.04 0.25/0.22 0.5/0.50 0.75/0.73 1/0.92':
@@ -32,7 +32,7 @@ ffmpeg -i fuente/video/video.mp4 \
   " \
   -c:v libx264 -crf 18 -preset medium \
   -c:a copy \
-  -y fuente/video/video_final.mp4
+  -y fuente/video/3_video_color_grade.mp4
 ```
 
 **Desglose de cada filtro aplicado:**
@@ -142,18 +142,18 @@ Si quieres ajustar el look para futuros videos:
 
 ## Resumen de Archivos Generados
 
-| Archivo                               | Paso | Tamaño                            |
-| ------------------------------------- | ---- | --------------------------------- |
-| `fuente/audio/audio_extraido.aac`     | 1    | 30 MB                             |
-| `fuente/audio/audio_stereo_v2.wav`    | 2    | 280 MB                            |
-| `fuente/video/video_sincronizado.mp4` | 4    | 8.8 GB                            |
-| `fuente/video/video_denoised.mp4`     | 5    | ~1.5 GB (re-encoded H.264 CRF 18) |
-| `fuente/video/video_final.mp4`        | 6    | ~1.5 GB (re-encoded H.264 CRF 18) |
+| Archivo                                 | Paso | Tamaño                            |
+| --------------------------------------- | ---- | --------------------------------- |
+| `fuente/audio/1_audio_extraido.aac`     | 1    | 30 MB                             |
+| `fuente/audio/1_audio_stereo.wav`       | 2    | 280 MB                            |
+| `fuente/video/1_video_sincronizado.mp4` | 4    | 8.8 GB                            |
+| `fuente/video/2_video_denoised.mp4`     | 5    | ~1.5 GB (re-encoded H.264 CRF 18) |
+| `fuente/video/3_video_color_grade.mp4`  | 6    | ~1.5 GB (re-encoded H.264 CRF 18) |
 
-Archivos temporales (en `/tmp/`, se pueden borrar):
+Archivos temporales (en `tmp/` dentro del folder del video, se pueden borrar):
 
-- `/tmp/sony_chunk.wav` — chunk de Sony para correlación
-- `/tmp/sm7b_chunk.wav` — chunk de SM7B para correlación
+- `tmp/sony_chunk.wav` — chunk de Sony para correlación
+- `tmp/sm7b_chunk.wav` — chunk de SM7B para correlación
 
 ## Dependencias
 

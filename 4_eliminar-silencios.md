@@ -23,9 +23,9 @@ Además, al cortar no queremos que una frase termine y la siguiente empiece _inm
 ffmpeg tiene un filtro llamado `silencedetect` que analiza el audio y reporta cada segmento de silencio con su timestamp de inicio, fin y duración.
 
 ```bash
-ffmpeg -i fuente/video/video_final.mp4 \
+ffmpeg -i fuente/video/3_video_color_grade.mp4 \
   -af "silencedetect=noise=-30dB:d=0.8" \
-  -f null - 2>&1 | grep "silence_" > /tmp/silences.txt
+  -f null - 2>&1 | grep "silence_" > tmp/silences.txt
 ```
 
 | Flag                      | Qué hace                                                                                                                                                                                                                |
@@ -64,7 +64,7 @@ Con la lista de silencios, invertimos la lógica: en vez de "dónde hay silencio
 import re, os
 
 # 1. Parsear el output de silencedetect
-with open('/tmp/silences.txt') as f:
+with open('tmp/silences.txt') as f:
     lines = f.readlines()
 
 silences = []
@@ -165,8 +165,8 @@ Usamos MPEG Transport Stream como formato intermedio porque:
 ```bash
 #!/bin/bash
 set -e
-SRC="fuente/video/video_final.mp4"
-DIR=/tmp/jc_segments
+SRC="fuente/video/3_video_color_grade.mp4"
+DIR=tmp/jc_segments
 mkdir -p $DIR
 
 # Extraer cada segmento como .ts
@@ -185,7 +185,7 @@ done
 
 # Concatenar todos los .ts en un .mp4 final
 # -c copy = no re-encodea, solo empaqueta
-ffmpeg -f concat -safe 0 -i $DIR/list.txt -c copy -y video_jumpcut.mp4
+ffmpeg -f concat -safe 0 -i $DIR/list.txt -c copy -y 4_video_jumpcut.mp4
 ```
 
 | Flag                   | Qué hace                                                              |
@@ -235,19 +235,19 @@ Los jump cuts automáticos son el 80% del trabajo mecánico. Para el 20% creativ
 
 ## Resumen de Archivos Generados
 
-| Archivo                               | Paso | Tamaño                                      |
-| ------------------------------------- | ---- | ------------------------------------------- |
-| `fuente/audio/audio_extraido.aac`     | 1    | 30 MB                                       |
-| `fuente/audio/audio_stereo_v2.wav`    | 2    | 280 MB                                      |
-| `fuente/video/video_sincronizado.mp4` | 4    | 8.8 GB                                      |
-| `fuente/video/video_denoised.mp4`     | 5    | ~1.5 GB (re-encoded H.264 CRF 18)           |
-| `fuente/video/video_final.mp4`        | 6    | ~1.5 GB (re-encoded H.264 CRF 18)           |
-| `video_jumpcut.mp4`                   | 7    | ~800 MB (17:10, 160 segmentos concatenados) |
+| Archivo                                 | Paso | Tamaño                                      |
+| --------------------------------------- | ---- | ------------------------------------------- |
+| `fuente/audio/1_audio_extraido.aac`       | 1    | 30 MB                                       |
+| `fuente/audio/1_audio_stereo.wav`      | 2    | 280 MB                                      |
+| `fuente/video/1_video_sincronizado.mp4` | 4    | 8.8 GB                                      |
+| `fuente/video/2_video_denoised.mp4`     | 5    | ~1.5 GB (re-encoded H.264 CRF 18)           |
+| `fuente/video/3_video_color_grade.mp4`  | 6    | ~1.5 GB (re-encoded H.264 CRF 18)           |
+| `fuente/video/4_video_jumpcut.mp4`      | 7    | ~800 MB (17:10, 160 segmentos concatenados) |
 
-Archivos temporales (en `/tmp/`, se pueden borrar):
+Archivos temporales (en `tmp/` dentro del folder del video, se pueden borrar):
 
-- `/tmp/sony_chunk.wav` — chunk de Sony para correlación
-- `/tmp/sm7b_chunk.wav` — chunk de SM7B para correlación
+- `tmp/sony_chunk.wav` — chunk de Sony para correlación
+- `tmp/sm7b_chunk.wav` — chunk de SM7B para correlación
 
 ## Dependencias
 

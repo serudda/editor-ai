@@ -27,17 +27,17 @@ Es como tomar varias fotos de lo mismo y promediarlas — el ruido desaparece, l
 **Comando:**
 
 ```bash
-ffmpeg -i fuente/video_sincronizado.mp4 \
+ffmpeg -i fuente/video/1_video_sincronizado.mp4 \
   -vf "hqdn3d=3:3:4:4" \
   -c:v libx264 -crf 18 -preset medium \
   -c:a copy \
-  -y fuente/video_denoised.mp4
+  -y fuente/video/2_video_denoised.mp4
 ```
 
 **Ejemplo real:**
 
 ```bash
-cd ~/Documents/Edicion/Serudda/serudda-videos/2026-02-11_mejor-epoca-para-ti && ffmpeg -i fuente/video_sincronizado.mp4 -vf "hqdn3d=3:3:4:4" -c:v libx264 -crf 18 -preset medium -c:a copy -y fuente/video_denoised.mp4
+cd ~/Documents/Edicion/Serudda/serudda-videos/2026-02-11_mejor-epoca-para-ti && ffmpeg -i fuente/video/1_video_sincronizado.mp4 -vf "hqdn3d=3:3:4:4" -c:v libx264 -crf 18 -preset medium -c:a copy -y fuente/video/2_video_denoised.mp4
 ```
 
 | Flag                   | Qué hace                                                                                            |
@@ -66,17 +66,17 @@ cd ~/Documents/Edicion/Serudda/serudda-videos/2026-02-11_mejor-epoca-para-ti && 
 
 ## Resumen de Archivos Generados
 
-| Archivo                         | Paso | Tamaño                            |
-| ------------------------------- | ---- | --------------------------------- |
-| `fuente/audio_extraido.aac`     | 1    | 30 MB                             |
-| `fuente/audio_stereo_v2.wav`    | 2    | 280 MB                            |
-| `fuente/video_sincronizado.mp4` | 4    | 8.8 GB                            |
-| `fuente/video_denoised.mp4`     | 5    | ~1.5 GB (re-encoded H.264 CRF 18) |
+| Archivo                           | Paso | Tamaño                            |
+| --------------------------------- | ---- | --------------------------------- |
+| `fuente/1_audio_extraido.aac`     | 1    | 30 MB                             |
+| `fuente/1_audio_stereo_v2.wav`    | 2    | 280 MB                            |
+| `fuente/1_video_sincronizado.mp4` | 4    | 8.8 GB                            |
+| `fuente/2_video_denoised.mp4`     | 5    | ~1.5 GB (re-encoded H.264 CRF 18) |
 
-Archivos temporales (en `/tmp/`, se pueden borrar):
+Archivos temporales (en `tmp/` dentro del folder del video, se pueden borrar):
 
-- `/tmp/sony_chunk.wav` — chunk de Sony para correlación
-- `/tmp/sm7b_chunk.wav` — chunk de SM7B para correlación
+- `tmp/sony_chunk.wav` — chunk de Sony para correlación
+- `tmp/sm7b_chunk.wav` — chunk de SM7B para correlación
 
 ## Dependencias
 

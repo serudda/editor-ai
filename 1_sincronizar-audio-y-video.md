@@ -13,8 +13,8 @@ Sergio grabó un video con dos fuentes separadas:
 
 | Archivo            | Descripción                             | Tamaño |
 | ------------------ | --------------------------------------- | ------ |
-| `fuente/video.MP4` | Video original de cámara                | 9.1 GB |
-| `fuente/audio.mkv` | Grabación OBS: audio SM7B + video negro | 1.1 GB |
+| `fuente/video/0_video_original.MP4` | Video original de cámara                | 9.1 GB |
+| `fuente/audio/0_audio_original.mkv` | Grabación OBS: audio SM7B + video negro | 1.1 GB |
 
 ---
 
@@ -27,7 +27,7 @@ Sergio grabó un video con dos fuentes separadas:
 **Razonamiento:** Usamos `-c:a copy` en vez de re-encodear porque queremos el audio _exacto_ que capturó el SM7B. Cualquier re-encoding introduce pérdida de calidad innecesaria. El flag `-vn` descarta el stream de video completamente.
 
 ```bash
-ffmpeg -i fuente/audio.mkv -vn -c:a copy fuente/1_audio_extraido.aac
+ffmpeg -i fuente/audio/0_audio_original.mkv -vn -c:a copy fuente/1_audio_extraido.aac
 ```
 
 | Flag           | Qué hace                                                          |
@@ -54,7 +54,7 @@ ffmpeg -i fuente/audio.mkv -vn -c:a copy fuente/1_audio_extraido.aac
 ffmpeg -i fuente/1_audio_extraido.aac \
   -af "pan=stereo|c0=c0|c1=c0" \
   -c:a pcm_s16le \
-  fuente/audio_stereo.wav
+  fuente/audio/1_audio_stereo.wav
 ```
 
 | Flag                             | Qué hace                                                                                                                           |
@@ -82,7 +82,7 @@ Downsamplamos a 8kHz mono (no necesitamos calidad, solo la forma de la onda) y t
 
 ```bash
 # Sony: 60 segundos empezando en t=30s (evitar ruido de setup al inicio)
-ffmpeg -i fuente/video.MP4 -vn -ac 1 -ar 8000 -ss 30 -t 60 -y tmp/sony_chunk.wav
+ffmpeg -i fuente/video/0_video_original.MP4 -vn -ac 1 -ar 8000 -ss 30 -t 60 -y tmp/sony_chunk.wav
 
 # SM7B: 90 segundos desde el inicio (ventana más amplia para encontrar dónde cae el chunk de Sony)
 ffmpeg -i fuente/1_audio_stereo.wav -ac 1 -ar 8000 -t 90 -y tmp/sm7b_chunk.wav
@@ -169,7 +169,7 @@ Offset: 6.801s | Confianza: 7.5x
 **Razonamiento:** Usamos el filtro `adelay` de ffmpeg que añade milisegundos de silencio al inicio de un stream de audio. Copiamos el video sin re-encodear (`-c:v copy`) porque no queremos tocar la calidad del video — solo estamos reemplazando el audio. El audio sí se re-encodea a AAC porque necesitamos aplicar el filtro de delay.
 
 ```bash
-ffmpeg -i fuente/video.MP4 -i fuente/audio_stereo_v2.wav \
+ffmpeg -i fuente/video/0_video_original.MP4 -i fuente/1_audio_stereo.wav \
   -filter_complex "[1:a]adelay=6801|6801[delayed_audio]" \
   -map 0:v -map "[delayed_audio]" \
   -c:v copy -c:a aac -b:a 192k \
@@ -180,7 +180,7 @@ ffmpeg -i fuente/video.MP4 -i fuente/audio_stereo_v2.wav \
 | Flag                                    | Qué hace                                                                   |
 | --------------------------------------- | -------------------------------------------------------------------------- |
 | `-i video.MP4`                          | Input 0: video de la Sony (usamos su video)                                |
-| `-i audio_stereo_v2.wav`                | Input 1: audio del SM7B (usamos su audio)                                  |
+| `-i 1_audio_stereo.wav`                 | Input 1: audio del SM7B (usamos su audio)                                  |
 | `[1:a]adelay=6801\|6801[delayed_audio]` | Toma el audio del input 1, le añade 6801ms de delay a ambos canales (L\|R) |
 | `-map 0:v`                              | Usa el video del input 0 (Sony)                                            |
 | `-map "[delayed_audio]"`                | Usa el audio delayed del SM7B                                              |
@@ -188,7 +188,7 @@ ffmpeg -i fuente/video.MP4 -i fuente/audio_stereo_v2.wav \
 | `-c:a aac -b:a 192k`                    | Encodea el audio a AAC 192kbps (buena calidad para edición)                |
 | `-shortest`                             | Corta cuando el stream más corto termine (el video de Sony es más corto)   |
 
-**Resultado:** `video_sincronizado.mp4` (8.8 GB, 25:11) — video de Sony A6400 + audio de SM7B perfectamente sincronizados.
+**Resultado:** `1_video_sincronizado.mp4` (8.8 GB, 25:11) — video de Sony A6400 + audio de SM7B perfectamente sincronizados.
 
 **Tiempo de procesamiento:** ~22 segundos en Apple Silicon (el video se copia sin tocar, solo se procesa el audio).
 
@@ -196,11 +196,11 @@ ffmpeg -i fuente/video.MP4 -i fuente/audio_stereo_v2.wav \
 
 ## Resumen de Archivos Generados
 
-| Archivo                         | Paso | Tamaño |
-| ------------------------------- | ---- | ------ |
-| `fuente/audio_extraido.aac`     | 1    | 30 MB  |
-| `fuente/audio_stereo_v2.wav`    | 2    | 280 MB |
-| `fuente/video_sincronizado.mp4` | 4    | 8.8 GB |
+| Archivo                           | Paso | Tamaño |
+| --------------------------------- | ---- | ------ |
+| `fuente/1_audio_extraido.aac`     | 1    | 30 MB  |
+| `fuente/1_audio_stereo.wav`       | 2    | 280 MB |
+| `fuente/1_video_sincronizado.mp4` | 4    | 8.8 GB |
 
 Archivos temporales (en `tmp/` dentro del folder del video, se pueden borrar):
 
