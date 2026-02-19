@@ -1,35 +1,50 @@
-# Logo Overlay — Detectar marcas y superponer logos
+# Paso 6 — Logo Overlay
 
 **Problema:** Sergio menciona empresas, productos y marcas en sus videos. Quiere que aparezca el logo en pantalla cuando los nombra. Hacerlo manualmente en DaVinci toma mucho tiempo.
 
-**Solución:** Semi-automatizado. Transcribir con timestamps por palabra → detectar marcas → generar archivo de revisión → Sergio valida con ✅/❌ → aplicar overlays con ffmpeg en single pass.
+**Solución:** Semi-automatizado. Leer la transcripción (Paso 5) → detectar marcas → generar `overlay-logos.md` → Sergio valida con ✅/❌ → aplicar overlays con ffmpeg en single pass.
+
+**Prerequisito:** Paso 5 completado (`fuente/transcription/transcription_original.json` debe existir).
 
 ---
 
 ## Flujo completo
 
-### 1. Sinistra transcribe y detecta marcas
+### 1. 🌑 Sinistra detecta marcas en la transcripción
 
-Sinistra transcribe el video con Whisper API usando **word-level timestamps** (no segmentos). Esto es clave — el logo aparece exactamente cuando se dice la palabra, no al inicio del segmento.
+Lee `transcription_original.json` (generado en Paso 5), busca menciones de marcas tech en las palabras con timestamps, y genera `fuente/transcription/overlay-logos.md`.
 
-```bash
-# Extraer audio comprimido (Whisper tiene límite de 25MB)
-ffmpeg -i 4_video_jumpcut.mp4 -vn -c:a libopus -b:a 48k -y tmp/audio_whisper.ogg
+**NO vuelve a llamar a Whisper API.** La transcripción ya existe.
 
-# Transcribir con timestamps por palabra
-curl -sS https://api.openai.com/v1/audio/transcriptions \
-  -H "Authorization: Bearer $OPENAI_API_KEY" \
-  -F "file=@tmp/audio_whisper.ogg" \
-  -F "model=whisper-1" \
-  -F "response_format=verbose_json" \
-  -F "language=es" \
-  -F "timestamp_granularities[]=word" \
-  > tmp/transcription_words.json
+**Proceso de traducción (lo hace Sinistra manualmente, no un script):**
+
+1. Abre `fuente/transcription/transcription_original.json`
+2. Recorre el array `words[]` buscando nombres de marcas tech (OpenAI, Anthropic, Google, Claude, etc.)
+3. Por cada marca encontrada, toma el `start` de esa palabra como timestamp exacto
+4. Genera una entrada en `overlay-logos.md` con formato:
+   ```
+   [MM:SS - MM:SS] "contexto de la frase donde aparece la marca"
+     → nombre-logo.png | ✅
+   ```
+   Donde el primer timestamp = `word.start` y el segundo = `word.start + 3s` (duración del logo)
+5. Marca todas como ✅ por defecto — Sergio decide cuáles quitar
+
+**Ejemplo concreto de la traducción:**
+
+JSON (input):
+```json
+{ "word": "OpenAI", "start": 5.10, "end": 5.58 }
 ```
 
-**⚠️ IMPORTANTE:** Usar `timestamp_granularities[]=word`, NO `segment`. La diferencia es de varios segundos de precisión.
+overlay-logos.md (output):
+```
+[0:05 - 0:08] "algo aún más fuerte OpenAI los creadores de ChatGPT"
+  → openai.png | ✅
+```
 
-### 2. Sinistra descarga logos
+**¿Por qué no es un script?** Porque la detección de marcas requiere criterio: "Apple" puede ser la empresa o la fruta, "Meta" puede ser la empresa o la palabra "meta". Sinistra usa contexto de la frase para decidir. Un script regex tendría muchos falsos positivos.
+
+### 2. 🌑 Sinistra descarga logos
 
 Los logos se buscan en este orden:
 
@@ -48,7 +63,7 @@ curl -sS "https://svgl.app/library/anthropic_white.svg" -o fuente/logos/anthropi
 rsvg-convert -w 256 -h 256 --keep-aspect-ratio fuente/logos/anthropic.svg -o fuente/logos/anthropic.png
 ```
 
-### 3. Sergio revisa `fuente/transcripcion/logo-overlay.md`
+### 3. 🎬 Sergio revisa `fuente/transcription/overlay-logos.md`
 
 Solo cambia ✅ ↔ ❌. Nada más.
 
@@ -66,62 +81,53 @@ Solo cambia ✅ ↔ ❌. Nada más.
 - Si el intro se repite (teleprompter), dejar solo una mención ✅
 - 3 segundos por logo es el default — suficiente para que se vea sin molestar
 
-### 4. Sergio corre el script
+### 4. 🎬 Sergio corre el script
 
 ```bash
 # Ver qué va a hacer (sin generar video)
-python3 ~/Documents/Projects/editor-ai/scripts/logo-overlay.py ~/ruta/al/folder --dry-run
+python3 scripts/logo-overlay.py $VIDEO --dry-run
 
 # Solo ver el comando ffmpeg que generaría
-python3 ~/Documents/Projects/editor-ai/scripts/logo-overlay.py ~/ruta/al/folder --print-cmd
+python3 scripts/logo-overlay.py $VIDEO --print-cmd
 
 # Generar el video (tarda ~10-20 min para 17 min de video)
-python3 ~/Documents/Projects/editor-ai/scripts/logo-overlay.py ~/ruta/al/folder-fuente-video
-
-# Con video diferente
-python3 ~/Documents/Projects/editor-ai/scripts/logo-overlay.py ~/ruta/al/folder-fuente-video --video 4_video_jumpcut.mp4
+python3 scripts/logo-overlay.py $VIDEO
 
 # Personalizar
-python3 ~/Documents/Projects/editor-ai/scripts/logo-overlay.py ~/ruta/al/folder-fuente-video --size 150 --padding 50
+python3 scripts/logo-overlay.py $VIDEO --size 150 --padding 50
 ```
 
-| Flag          | Default             | Qué hace                                 |
-| ------------- | ------------------- | ---------------------------------------- |
-| `--video`     | 4_video_jumpcut.mp4 | Video de entrada                         |
-| `--output`    | `<video>_logos.mp4` | Video de salida                          |
-| `--size`      | 120                 | Tamaño del logo en px                    |
-| `--padding`   | 40                  | Padding del borde en px                  |
-| `--fade`      | 0.3                 | Fade in/out en segundos                  |
-| `--duration`  | 3                   | Duración del logo en pantalla (segundos) |
-| `--crf`       | 18                  | Calidad de video                         |
-| `--preset`    | fast                | Preset de encoding                       |
-| `--dry-run`   | —                   | Solo muestra detecciones                 |
-| `--print-cmd` | —                   | Solo imprime el comando ffmpeg           |
+| Flag | Default | Qué hace |
+|------|---------|----------|
+| `--video` | 4_video_jumpcut.mp4 | Video de entrada |
+| `--output` | `<video>_logos.mp4` | Video de salida (en output/) |
+| `--size` | 120 | Tamaño del logo en px |
+| `--padding` | 40 | Padding del borde en px |
+| `--fade` | 0.3 | Fade in/out en segundos |
+| `--duration` | 3 | Duración del logo en pantalla (segundos) |
+| `--crf` | 18 | Calidad de video |
+| `--dry-run` | — | Solo muestra detecciones |
+| `--print-cmd` | — | Solo imprime el comando ffmpeg |
 
 ---
 
-## Estructura de archivos por video
-
-Todo lo relacionado al proceso vive dentro del folder del video:
+## Archivos involucrados
 
 ```
-2026-02-11_mejor-epoca-para-ti/
-├── fuente/
-│   ├── audio/
-│   └── video/
-├── tmp/                            ← Temporales del proceso
-│   ├── logos/                      ← PNGs descargados (SVGL o local)
-│   │   ├── anthropic.png
-│   │   ├── openai.png
-│   │   └── ...
-│   ├── audio_whisper.ogg           ← Audio comprimido para Whisper
-│   └── transcription_words.json    ← Transcripción con timestamps por palabra
-├── logo-overlay.md                 ← Detecciones para revisión (✅/❌)
-├── 4_video_jumpcut.mp4            ← Input
-└── video_jumpcut_v1_logos.mp4      ← Output con logos
-```
+fuente/
+├── transcription/
+│   ├── transcription_original.json   ← INPUT (del Paso 5, NO tocar)
+│   └── overlay-logos.md              ← Detecciones para revisión (✅/❌)
+├── logos/                            ← PNGs descargados
+│   ├── anthropic.png
+│   ├── openai.png
+│   └── ...
+└── video/
+    └── 4_video_jumpcut.mp4           ← Video de entrada
 
-Para limpiar temporales: `rm -rf tmp/` dentro del folder del video.
+output/
+└── 4_video_jumpcut_logos.mp4         ← Video con logos
+```
 
 ---
 
@@ -131,11 +137,9 @@ Para limpiar temporales: `rm -rf tmp/` dentro del folder del video.
 
 El script genera UN SOLO comando ffmpeg con todos los overlays en el `filter_complex`. Cada logo es un input separado y se activa/desactiva con `enable='between(t,start,end)'`.
 
-**¿Por qué single pass?** Probamos batches (dividir en 4 passes de 4 overlays) y los logos no aparecían en el video final. El single pass funciona correctamente — cada overlay tiene sus timestamps absolutos y ffmpeg los aplica todos en una pasada.
+**¿Por qué single pass?** Probamos batches (dividir en múltiples passes) y los logos no aparecían en el video final. Single pass funciona correctamente.
 
-**Trade-off RAM:** Con muchos overlays (20+), ffmpeg necesita más RAM. En Apple Silicon M1/M2 con 16GB no debería haber problema. Si se muere, reducir la cantidad de logos aprobados (✅).
-
-### Parseo de `fuente/transcripcion/logo-overlay.md`
+### Parseo de `overlay-logos.md`
 
 El script busca líneas con este formato:
 
@@ -145,7 +149,7 @@ El script busca líneas con este formato:
 ```
 
 - Solo procesa las marcadas con ✅
-- Detecta overlaps automáticamente y apila logos verticalmente (stack_level)
+- Detecta overlaps y apila logos verticalmente
 - El nombre del logo debe coincidir con el archivo en `fuente/logos/`
 
 ### Overlays con ffmpeg
@@ -154,48 +158,70 @@ Cada logo se aplica con:
 
 - `scale` → redimensiona al tamaño configurado
 - `format=rgba` → preserva transparencia del PNG
-- `fade` → fade in al inicio, fade out al final (alpha-based)
-- `overlay` con `enable='between(t,start,end)'` → solo visible en el rango de tiempo
-- Posición default: esquina inferior derecha con padding configurable
-- Logos que se solapan en tiempo se apilan verticalmente (uno encima del otro)
+- `fade` → fade in al inicio, fade out al final
+- `overlay` con `enable='between(t,start,end)'` → solo visible en el rango
+- Posición: esquina inferior derecha con padding
+- Logos solapados en tiempo se apilan verticalmente
 
 ---
 
 ## Resolución de Logos (orden de prioridad)
 
-### 1. SVGL API (primera opción — automático)
-
-```bash
-curl -sS "https://api.svgl.app?search=anthropic"
-# route.light → logo para fondo claro (logo oscuro)
-# route.dark  → logo para fondo oscuro (logo claro)
-```
-
-### 2. Repo local (fallback)
-
-`~/Documents/Edicion/Serudda/recursos/logos/` (~120 marcas en formato slug)
-
-### 3. Sergio lo agrega (último recurso)
-
-Si no está en ningún lado, Sergio lo busca y lo deja en `fuente/logos/` del video.
+1. **SVGL API** — `curl -sS "https://api.svgl.app?search=nombre"`
+2. **Repo local** — `~/Documents/Edicion/Serudda/recursos/logos/` (~120 marcas en slug)
+3. **Manual** — Sergio lo busca y lo deja en `fuente/logos/`
 
 ---
 
 ## Lecciones aprendidas
 
-1. **Timestamps por segmento son imprecisos.** Un segmento de Whisper puede empezar varios segundos antes de la palabra de la marca. Siempre usar `timestamp_granularities[]=word`.
+1. **Timestamps por segmento son imprecisos.** Siempre usar word-level (Paso 5 ya lo hace).
+2. **Batches no funcionan.** Single pass es la solución.
+3. **3 segundos es la duración ideal.** 5s es demasiado largo.
+4. **El logo aparece cuando se dice la palabra, no antes.**
 
-2. **Batches no funcionan.** Al dividir en múltiples passes, los logos no aparecen en el video final. Causa probable: re-encoding entre passes afecta los timestamps. Single pass es la solución.
+---
 
-3. **3 segundos es la duración ideal.** 5 segundos se siente demasiado largo. 3 segundos es suficiente para que se vea sin molestar.
+## 🐛 Bug abierto: Logos no aparecen en video completo (Feb 19, 2026)
 
-4. **El logo debe aparecer cuando se dice la palabra, no antes.** La precisión a nivel de palabra hace la diferencia entre "profesional" y "raro".
+### Síntoma
+El script genera el video (re-encodea completo, ~7 min, ~766MB) pero los logos NO aparecen visualmente en ningún timestamp. ffmpeg reporta stream mapping correcto con todos los overlays.
+
+### Lo que SÍ funciona
+- **Clip corto (10s) con 1 logo** → logo visible ✅
+- **Video completo con 1 logo, comando manual single-line** → logo visible ✅
+  ```bash
+  ffmpeg -i video.mp4 -i logo.png -filter_complex "[1:v]scale=...;[0:v][logo]overlay=...:enable='between(t,105,108)'[out]" -map "[out]" -map 0:a -c:v libx264 -crf 18 -preset fast -c:a copy -y output.mp4
+  ```
+
+### Lo que NO funciona
+- **Video completo con 12 logos via `logo-overlay.py`** → logos no aparecen ❌
+- Tanto con `subprocess.run(cmd_list)` como generando `.sh` + `bash script.sh`
+- Tanto con `enable='between(t,105,108)'` (comillas simples) como `enable=between(t\,105\,108)` (commas escapadas)
+
+### Hipótesis descartadas
+- ❌ Timestamps incorrectos — transcripción coincide con duración del video (1030s ambos)
+- ❌ PTS del video descalibrado — `start_time: 0.021` (normal)
+- ❌ `-ss` reseteando timestamps — no se usa `-ss` en el script
+- ❌ Logos PNG corruptos — funcionan en test de clip corto
+- ❌ `\n` en filter_complex — eliminado, mismo resultado
+- ❌ `capture_output=True` ocultando errores — removido, mismo resultado
+
+### Hipótesis pendientes de investigar
+- **¿El encadenamiento de 12 overlays causa el problema?** El test de 1 logo manual funciona. Nunca se probó correctamente un comando manual con 2+ logos en video completo (los intentos previos se pegaron multi-línea desde Telegram y podrían haberse corrompido).
+- **¿Algo en el `.sh` generado vs el comando manual difiere sutilmente?** El `.sh` generado se ve idéntico al formato manual, pero no se ha probado corriendo el `.sh` manualmente con `bash`.
+- **¿El video `4_video_jumpcut.mp4` tiene algo especial?** Fue creado concatenando 160 segmentos .ts. Los timestamps podrían tener discontinuidades internas que confunden el `enable=between()` en overlays encadenados.
+- **¿Probar con `drawtext` como debug?** Poner un texto con timestamp visible en el video para confirmar qué valores tiene `t` en cada momento.
+
+### Próximo paso sugerido
+1. Probar corriendo `bash tmp/logo_overlay_cmd.sh` directamente en terminal (no via Python)
+2. Si no funciona, probar con solo 2 logos (no 12) en un `.sh` manual
+3. Si 2 logos no funcionan, probar `drawtext=text='%{pts}':fontsize=48` para ver timestamps reales del video
 
 ---
 
 ## Dependencias
 
 - `ffmpeg` — overlays de video
-- `curl` + OpenAI API — transcripción con Whisper (lo corre Sinistra)
 - `rsvg-convert` — conversión SVG → PNG (`brew install librsvg`)
 - `python3` — script de overlay

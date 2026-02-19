@@ -13,13 +13,15 @@ editor-ai/
 ├── 2_reducir-ruido-visual.md          ← Paso 2
 ├── 3_color-grade-cinematografico.md   ← Paso 3
 ├── 4_eliminar-silencios.md            ← Paso 4
-├── 5_logo-overlay.md                  ← Paso 5
+├── 5_generar-transcripcion.md                 ← Paso 5
+├── 6_logo-overlay.md                  ← Paso 6
 └── scripts/
     ├── sync-audio.py                  ← Script Paso 1
     ├── denoise.py                     ← Script Paso 2
     ├── color-grade.py                 ← Script Paso 3
     ├── jump-cut.py                    ← Script Paso 4
-    └── logo-overlay.py                ← Script Paso 5
+    ├── transcribe.py                  ← Script Paso 5
+    └── logo-overlay.py               ← Script Paso 6
 ```
 
 ## Estructura de cada video
@@ -40,9 +42,11 @@ YYYY-MM-DD_nombre-del-video/
 │   │   ├── 2_video_denoised.mp4              ← Paso 2: ruido visual reducido
 │   │   ├── 3_video_color_grade.mp4           ← Paso 3: color cinematográfico
 │   │   └── 4_video_jumpcut.mp4               ← Paso 4: silencios eliminados
-│   ├── transcripcion/                      ← Transcripciones y detecciones
-│   │   ├── transcription_words.json        ← Whisper word-level timestamps
-│   │   └── logo-overlay.md                 ← Detecciones de logos (✅/❌)
+│   ├── transcription/                      ← Transcripciones y overlays
+│   │   ├── transcription_original.json     ← Paso 5: Whisper word-level (FUENTE DE VERDAD)
+│   │   ├── overlay-logos.md                ← Paso 6: Detecciones de logos (✅/❌)
+│   │   ├── overlay-broll.md                ← Paso 7: Inserciones de B-Roll (✅/❌)
+│   │   └── overlay-images.md              ← Futuro: Imágenes/GIFs
 │   └── logos/                              ← Logos descargados para este video
 │       ├── openai.png
 │       └── ...
@@ -53,6 +57,7 @@ YYYY-MM-DD_nombre-del-video/
 ```
 
 **¿Qué va dónde?**
+
 - **`fuente/`** → intermedios del pipeline. Cada paso genera un archivo aquí.
 - **`output/`** → lo que sale de la carpeta. El video listo para YouTube.
 - **`tmp/`** → pruebas, test clips, basura. Se puede borrar con `rm -rf tmp/`.
@@ -74,6 +79,7 @@ $VIDEO = ~/Documents/Edicion/Serudda/serudda-videos/YYYY-MM-DD_nombre-del-video
 ---
 
 ### Paso 1 — Sincronizar Audio y Video
+
 **Doc:** [1_sincronizar-audio-y-video.md](1_sincronizar-audio-y-video.md) · **Script:** [`scripts/sync-audio.py`](scripts/sync-audio.py)
 
 Combina el audio del SM7B (OBS) con el video de la cámara (Sony A6400).
@@ -86,17 +92,18 @@ Combina el audio del SM7B (OBS) con el video de la cámara (Sony A6400).
 
 **Flags útiles:**
 
-| Flag | Default | Qué hace |
-|------|---------|----------|
-| `--video-file` | 0_video_original.MP4 | Nombre del video de cámara |
-| `--audio-file` | 0_audio_original.mkv | Nombre del audio OBS |
-| `--sony-start` | 30 | Segundo de inicio para chunk de Sony |
-| `--sony-duration` | 60 | Duración del chunk de Sony |
-| `--dry-run` | — | Solo detectar offset, no genera video |
+| Flag              | Default              | Qué hace                              |
+| ----------------- | -------------------- | ------------------------------------- |
+| `--video-file`    | 0_video_original.MP4 | Nombre del video de cámara            |
+| `--audio-file`    | 0_audio_original.mkv | Nombre del audio OBS                  |
+| `--sony-start`    | 30                   | Segundo de inicio para chunk de Sony  |
+| `--sony-duration` | 60                   | Duración del chunk de Sony            |
+| `--dry-run`       | —                    | Solo detectar offset, no genera video |
 
 ---
 
 ### Paso 2 — Reducir Ruido Visual
+
 **Doc:** [2_reducir-ruido-visual.md](2_reducir-ruido-visual.md) · **Script:** [`scripts/denoise.py`](scripts/denoise.py)
 
 Reduce ruido/grano con denoising temporal (hqdn3d).
@@ -109,15 +116,16 @@ Reduce ruido/grano con denoising temporal (hqdn3d).
 
 **Flags útiles:**
 
-| Flag | Default | Qué hace |
-|------|---------|----------|
-| `--input` | 1_video_sincronizado.mp4 | Video de entrada |
-| `--strength` | medium | Preset: light / medium / heavy |
-| `--custom` | — | Valores custom hqdn3d (ej: 5:5:6:6) |
+| Flag         | Default                  | Qué hace                            |
+| ------------ | ------------------------ | ----------------------------------- |
+| `--input`    | 1_video_sincronizado.mp4 | Video de entrada                    |
+| `--strength` | medium                   | Preset: light / medium / heavy      |
+| `--custom`   | —                        | Valores custom hqdn3d (ej: 5:5:6:6) |
 
 ---
 
 ### Paso 3 — Color Grade Cinematográfico
+
 **Doc:** [3_color-grade-cinematografico.md](3_color-grade-cinematografico.md) · **Script:** [`scripts/color-grade.py`](scripts/color-grade.py)
 
 Aplica tono cálido + look cinematográfico por capas.
@@ -130,16 +138,17 @@ Aplica tono cálido + look cinematográfico por capas.
 
 **Flags útiles:**
 
-| Flag | Default | Qué hace |
-|------|---------|----------|
-| `--input` | 2_video_denoised.mp4 | Video de entrada |
-| `--warmth` | 0.05 | Calidez en midtonos (0.0-0.10) |
-| `--saturation` | 1.1 | Saturación global |
-| `--no-vignette` | — | Desactivar viñeta |
+| Flag            | Default              | Qué hace                       |
+| --------------- | -------------------- | ------------------------------ |
+| `--input`       | 2_video_denoised.mp4 | Video de entrada               |
+| `--warmth`      | 0.05                 | Calidez en midtonos (0.0-0.10) |
+| `--saturation`  | 1.1                  | Saturación global              |
+| `--no-vignette` | —                    | Desactivar viñeta              |
 
 ---
 
 ### Paso 4 — Eliminar Silencios (Jump Cuts)
+
 **Doc:** [4_eliminar-silencios.md](4_eliminar-silencios.md) · **Script:** [`scripts/jump-cut.py`](scripts/jump-cut.py)
 
 Detecta silencios del teleprompter y los corta automáticamente. ⚠️ Tarda varios minutos en videos largos.
@@ -154,24 +163,47 @@ Detecta silencios del teleprompter y los corta automáticamente. ⚠️ Tarda va
 
 **Flags útiles:**
 
-| Flag | Default | Qué hace |
-|------|---------|----------|
-| `--padding` | 0.3 | Segundos de "aire" antes/después del corte |
-| `--min-silence` | 1.5 | Solo cortar silencios mayores a N segundos |
-| `--noise` | -30 | Threshold de silencio en dB |
-| `--dry-run` | — | Solo muestra stats, no genera video |
+| Flag            | Default | Qué hace                                   |
+| --------------- | ------- | ------------------------------------------ |
+| `--padding`     | 0.3     | Segundos de "aire" antes/después del corte |
+| `--min-silence` | 1.5     | Solo cortar silencios mayores a N segundos |
+| `--noise`       | -30     | Threshold de silencio en dB                |
+| `--dry-run`     | —       | Solo muestra stats, no genera video        |
 
 ---
 
-### Paso 5 — Logo Overlay
-**Doc:** [5_logo-overlay.md](5_logo-overlay.md) · **Script:** [`scripts/logo-overlay.py`](scripts/logo-overlay.py)
+### Paso 5 — Transcripción
 
-Detecta marcas mencionadas en el video y superpone sus logos. Este paso tiene varias sub-tareas.
+**Doc:** [5_generar-transcripcion.md](5_generar-transcripcion.md) · **Script:** [`scripts/transcribe.py`](scripts/transcribe.py)
 
-- [ ] 🌑 **Sinistra** transcribe el audio con word-level timestamps (Whisper API)
-- [ ] 🌑 **Sinistra** detecta marcas en la transcripción y genera `fuente/transcripcion/logo-overlay.md`
+Genera la transcripción cruda con timestamps a nivel de palabra. Es la **fuente de verdad** para todos los overlays.
+
+- [ ] 🌑 **Sinistra** corre el script:
+  ```bash
+  python3 scripts/transcribe.py $VIDEO
+  ```
+- [ ] 🌑 **Sinistra** confirma que `fuente/transcription/transcription_original.json` tiene words + segments
+
+**Flags útiles:**
+
+| Flag           | Default             | Qué hace                           |
+| -------------- | ------------------- | ---------------------------------- |
+| `--input`      | 4_video_jumpcut.mp4 | Video de entrada                   |
+| `--language`   | es                  | Idioma del audio                   |
+| `--audio-only` | —                   | Solo extraer audio, no transcribir |
+| `--dry-run`    | —                   | Muestra qué haría sin ejecutar     |
+
+---
+
+### Paso 6 — Logo Overlay
+
+**Doc:** [6_logo-overlay.md](6_logo-overlay.md) · **Script:** [`scripts/logo-overlay.py`](scripts/logo-overlay.py)
+
+Detecta marcas mencionadas en la transcripción y superpone sus logos.
+
+- [ ] 🌑 **Sinistra** detecta marcas en `transcription_original.json` y genera `fuente/transcription/overlay-logos.md`
 - [ ] 🌑 **Sinistra** descarga logos (SVGL API → repo local → manual)
-- [ ] 🎬 **Sergio** revisa `fuente/transcripcion/logo-overlay.md` y marca ✅/❌ en cada detección
+- [ ] 🎬 **Sergio** revisa `fuente/transcription/overlay-logos.md` y marca ✅/❌ en cada detección
   - Quitar repeticiones (ej: si dice "OpenAI" 5 veces en 30s, dejar solo la primera)
   - Quitar falsos positivos
 - [ ] 🌑 **Sinistra** confirma que todos los logos ✅ están en `fuente/logos/` como PNG
@@ -183,14 +215,14 @@ Detecta marcas mencionadas en el video y superpone sus logos. Este paso tiene va
 
 **Flags útiles:**
 
-| Flag | Default | Qué hace |
-|------|---------|----------|
-| `--video` | 4_video_jumpcut.mp4 | Video de entrada |
-| `--size` | 120 | Tamaño del logo en px |
-| `--padding` | 40 | Padding del borde en px |
-| `--fade` | 0.3 | Fade in/out en segundos |
-| `--dry-run` | — | Solo muestra detecciones |
-| `--print-cmd` | — | Solo imprime el comando ffmpeg |
+| Flag          | Default             | Qué hace                       |
+| ------------- | ------------------- | ------------------------------ |
+| `--video`     | 4_video_jumpcut.mp4 | Video de entrada               |
+| `--size`      | 120                 | Tamaño del logo en px          |
+| `--padding`   | 40                  | Padding del borde en px        |
+| `--fade`      | 0.3                 | Fade in/out en segundos        |
+| `--dry-run`   | —                   | Solo muestra detecciones       |
+| `--print-cmd` | —                   | Solo imprime el comando ffmpeg |
 
 ---
 
@@ -201,3 +233,4 @@ Detecta marcas mencionadas en el video y superpone sus logos. Este paso tiene va
 - `numpy` + `scipy` — cross-correlation (Paso 1)
 - `rsvg-convert` — conversión SVG → PNG (`brew install librsvg`)
 - OpenAI API key — transcripción con Whisper (Paso 5, lo corre Sinistra)
+- `requests` (opcional) — llamadas HTTP (el script usa urllib por defecto)
