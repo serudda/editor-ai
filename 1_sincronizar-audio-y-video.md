@@ -27,7 +27,7 @@ Sergio grabó un video con dos fuentes separadas:
 **Razonamiento:** Usamos `-c:a copy` en vez de re-encodear porque queremos el audio _exacto_ que capturó el SM7B. Cualquier re-encoding introduce pérdida de calidad innecesaria. El flag `-vn` descarta el stream de video completamente.
 
 ```bash
-ffmpeg -i fuente/audio.mkv -vn -c:a copy fuente/audio_extraido.aac
+ffmpeg -i fuente/audio.mkv -vn -c:a copy fuente/1_audio_extraido.aac
 ```
 
 | Flag           | Qué hace                                                          |
@@ -36,7 +36,7 @@ ffmpeg -i fuente/audio.mkv -vn -c:a copy fuente/audio_extraido.aac
 | `-vn`          | Descarta el video (fondo negro, no lo necesitamos)                |
 | `-c:a copy`    | Copia el audio tal cual, sin re-encodear. Cero pérdida de calidad |
 
-**Resultado:** `audio_extraido.aac` (30 MB, 25:27 de duración) — audio puro del SM7B.
+**Resultado:** `1_audio_extraido.aac` (30 MB, 25:27 de duración) — audio puro del SM7B.
 
 **Verificación:** Se reprodujo el archivo para confirmar que el audio se escucha correctamente.
 
@@ -44,14 +44,14 @@ ffmpeg -i fuente/audio.mkv -vn -c:a copy fuente/audio_extraido.aac
 
 ### 2. Convertir audio mono → estéreo
 
-**Problema:** Al reproducir `audio_extraido.aac`, el audio solo se escuchaba por el lado izquierdo de los audífonos. El lado derecho estaba en silencio.
+**Problema:** Al reproducir `1_audio_extraido.aac`, el audio solo se escuchaba por el lado izquierdo de los audífonos. El lado derecho estaba en silencio.
 
 **Diagnóstico:** El SM7B es un micrófono mono (una sola cápsula, una sola señal). OBS lo grabó como "estéreo" técnicamente (2 canales), pero solo llenó el canal izquierdo (c0). El canal derecho (c1) quedó vacío/silencioso.
 
 **Razonamiento:** No necesitamos hacer nada fancy — la señal mono es idéntica para ambos oídos. Solo hay que duplicar el canal izquierdo al derecho. Usamos el filtro `pan` de ffmpeg que permite reasignar canales. La salida es WAV (sin compresión) porque este archivo va directo a DaVinci Resolve para edición, y en edición siempre se trabaja con formatos sin pérdida.
 
 ```bash
-ffmpeg -i fuente/audio_extraido.aac \
+ffmpeg -i fuente/1_audio_extraido.aac \
   -af "pan=stereo|c0=c0|c1=c0" \
   -c:a pcm_s16le \
   fuente/audio_stereo.wav
@@ -62,7 +62,7 @@ ffmpeg -i fuente/audio_extraido.aac \
 | `-af "pan=stereo\|c0=c0\|c1=c0"` | Crea salida estéreo: canal izq (c0) = canal original izq (c0), canal der (c1) = también canal original izq (c0). Duplica la señal. |
 | `-c:a pcm_s16le`                 | Codifica como WAV 16-bit sin compresión (máxima calidad para editar en DaVinci)                                                    |
 
-**Resultado:** `audio_stereo.wav` (280 MB, 25:27, 48kHz estéreo) — audio por ambos lados.
+**Resultado:** `1_audio_stereo.wav` (280 MB, 25:27, 48kHz estéreo) — audio por ambos lados.
 
 **Por qué WAV y no AAC:** En edición de video se trabaja con audio sin compresión (WAV/PCM) para evitar artefactos de generación. AAC comprime → DaVinci decodifica → al exportar comprime de nuevo = doble pérdida. Con WAV la cadena es: original → WAV (sin pérdida) → DaVinci → export final (una sola compresión).
 
@@ -82,10 +82,10 @@ Downsamplamos a 8kHz mono (no necesitamos calidad, solo la forma de la onda) y t
 
 ```bash
 # Sony: 60 segundos empezando en t=30s (evitar ruido de setup al inicio)
-ffmpeg -i fuente/video.MP4 -vn -ac 1 -ar 8000 -ss 30 -t 60 -y /tmp/sony_chunk.wav
+ffmpeg -i fuente/video.MP4 -vn -ac 1 -ar 8000 -ss 30 -t 60 -y tmp/sony_chunk.wav
 
 # SM7B: 90 segundos desde el inicio (ventana más amplia para encontrar dónde cae el chunk de Sony)
-ffmpeg -i fuente/audio_stereo_v2.wav -ac 1 -ar 8000 -t 90 -y /tmp/sm7b_chunk.wav
+ffmpeg -i fuente/1_audio_stereo.wav -ac 1 -ar 8000 -t 90 -y tmp/sm7b_chunk.wav
 ```
 
 | Flag              | Qué hace                                                                       |
@@ -117,8 +117,8 @@ def read_wav(path):
         return data, w.getframerate()
 
 # Leer los chunks
-sony, sr = read_wav('/tmp/sony_chunk.wav')
-sm7b, _ = read_wav('/tmp/sm7b_chunk.wav')
+sony, sr = read_wav('tmp/sony_chunk.wav')
+sm7b, _ = read_wav('tmp/sm7b_chunk.wav')
 
 # Calcular envelopes (volumen promediado en ventanas de 100ms)
 # Esto suaviza las diferencias de calidad entre mics y deja solo el patrón de habla
@@ -174,7 +174,7 @@ ffmpeg -i fuente/video.MP4 -i fuente/audio_stereo_v2.wav \
   -map 0:v -map "[delayed_audio]" \
   -c:v copy -c:a aac -b:a 192k \
   -shortest \
-  -y fuente/video_sincronizado.mp4
+  -y fuente/1_video_sincronizado.mp4
 ```
 
 | Flag                                    | Qué hace                                                                   |
@@ -202,10 +202,10 @@ ffmpeg -i fuente/video.MP4 -i fuente/audio_stereo_v2.wav \
 | `fuente/audio_stereo_v2.wav`    | 2    | 280 MB |
 | `fuente/video_sincronizado.mp4` | 4    | 8.8 GB |
 
-Archivos temporales (en `/tmp/`, se pueden borrar):
+Archivos temporales (en `tmp/` dentro del folder del video, se pueden borrar):
 
-- `/tmp/sony_chunk.wav` — chunk de Sony para correlación
-- `/tmp/sm7b_chunk.wav` — chunk de SM7B para correlación
+- `tmp/sony_chunk.wav` — chunk de Sony para correlación
+- `tmp/sm7b_chunk.wav` — chunk de SM7B para correlación
 
 ## Dependencias
 
