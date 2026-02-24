@@ -3,7 +3,8 @@
 Paso 6 — Logo Overlay
 
 Lee `fuente/transcription/overlay-logos.md` del folder del video para saber
-qué logos aplicar y en qué momentos. Los logos se buscan en `fuente/logos/`.
+qué logos aplicar y en qué momentos. Los logos se buscan en el repo central:
+  ~/Documents/Edicion/Serudda/recursos/logos/{brand}/{brand}.png
 
 Uso:
   python3 logo-overlay.py <carpeta-del-video>
@@ -73,7 +74,7 @@ def main():
     parser.add_argument("--output", default=None, help="Video de salida (default: <video>_logos.mp4)")
     parser.add_argument("--size", type=int, default=120, help="Tamaño del logo en px (default: 120)")
     parser.add_argument("--padding", type=int, default=40, help="Padding del borde (default: 40)")
-    parser.add_argument("--fade", type=float, default=0.3, help="Fade in/out en segundos (default: 0.3)")
+    parser.add_argument("--fade", type=float, default=0.0, help="[DESACTIVADO] Fade causa logos invisibles en overlays encadenados. Se ignora.")
     parser.add_argument("--crf", type=int, default=18, help="Calidad CRF (default: 18)")
     parser.add_argument("--preset", default="fast", help="Preset de encoding (default: fast)")
     parser.add_argument("--dry-run", action="store_true", help="Solo mostrar detecciones")
@@ -84,7 +85,7 @@ def main():
     video_dir = os.path.expanduser(args.video_dir)
     video_path = os.path.join(video_dir, "fuente", "video", args.video)
     overlay_md = os.path.join(video_dir, "fuente", "transcription", "overlay-logos.md")
-    logo_dir = os.path.join(video_dir, "fuente", "logos")
+    logo_dir = os.path.expanduser("~/Documents/Edicion/Serudda/recursos/logos")
     output_dir = os.path.join(video_dir, "output")
     tmp_dir = os.path.join(video_dir, "tmp")
 
@@ -116,12 +117,12 @@ def main():
         stack_info = f" (stacked +{stack})" if stack > 0 else ""
         print(f"   [{format_time(start)} - {format_time(end)}] {logo}.png{stack_info}")
 
-    # Verificar logos existen
+    # Verificar logos existen (repo central: {brand}/{brand}.png)
     missing = set()
     for _, _, logo, _ in detections:
-        path = os.path.join(logo_dir, f"{logo}.png")
+        path = os.path.join(logo_dir, logo, f"{logo}.png")
         if not os.path.exists(path):
-            missing.add(f"{logo}.png")
+            missing.add(f"{logo}/{logo}.png")
     if missing:
         print(f"\n❌ Logos faltantes en {logo_dir}:")
         for m in sorted(missing):
@@ -140,7 +141,7 @@ def main():
     for _, _, logo, _ in detections:
         if logo not in logo_index:
             logo_index[logo] = len(logo_index) + 1
-            input_parts.append(f'-i "{os.path.join(logo_dir, logo + ".png")}"')
+            input_parts.append(f'-i "{os.path.join(logo_dir, logo, logo + ".png")}"')
 
     # Filter complex
     filters = []
@@ -152,11 +153,11 @@ def main():
         y_offset = (args.size + 10) * stack_level
         pos_y = f"H-{args.size}-{args.padding}" if stack_level == 0 else f"H-{args.size}-{args.padding}-{y_offset}"
 
+        # ⚠️ NO usar fade con alpha=1 en overlays encadenados — hace los logos invisibles.
+        # Ver 6_logo-overlay.md → "NOTA IMPORTANTE" para detalles.
         filters.append(
             f"[{idx}:v]scale={args.size}:{args.size}:force_original_aspect_ratio=decrease,"
-            f"format=rgba,"
-            f"fade=t=in:st={start}:d={args.fade}:alpha=1,"
-            f"fade=t=out:st={end - args.fade}:d={args.fade}:alpha=1[{sl}]"
+            f"format=rgba[{sl}]"
         )
         filters.append(
             f"[{chain}][{sl}]overlay=W-{args.size}-{args.padding}:{pos_y}:"

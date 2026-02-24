@@ -44,24 +44,45 @@ overlay-logos.md (output):
 
 **¿Por qué no es un script?** Porque la detección de marcas requiere criterio: "Apple" puede ser la empresa o la fruta, "Meta" puede ser la empresa o la palabra "meta". Sinistra usa contexto de la frase para decidir. Un script regex tendría muchos falsos positivos.
 
-### 2. 🌑 Sinistra descarga logos
+### 2. 🌑 Sinistra descarga logos al repo central
 
-Los logos se buscan en este orden:
+**Repo central:** `~/Documents/Edicion/Serudda/recursos/logos/`
 
-1. **SVGL API** (automático, +500 logos tech con variantes light/dark)
-2. **Repo local** (`~/Documents/Edicion/Serudda/recursos/logos/`)
-3. **Sergio lo agrega manualmente**
+Estructura por marca:
+```
+recursos/logos/
+├── anthropic/
+│   ├── anthropic.svg    ← fuente editable
+│   └── anthropic.png    ← 512x512 RGBA (lo que usa el script)
+├── openai/
+│   ├── openai.svg
+│   └── openai.png
+└── ...
+```
 
-Los logos descargados se guardan en `fuente/logos/` dentro del folder del video.
+**Flujo para cada logo:**
+1. ¿Existe en `recursos/logos/{brand}/{brand}.png`? → usar ese
+2. Si no → buscar en **SVGL API** (`curl -sS "https://api.svgl.app?search=brand"`)
+3. Si no → buscar en **Dashboard Icons** (`curl -sS "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/brand.png"`)
+4. Si no → Sergio lo agrega manualmente
+
+**Al descargar:** siempre guardar SVG + PNG (512x512 RGBA) en `recursos/logos/{brand}/`.
 
 ```bash
 # Buscar en SVGL
 curl -sS "https://api.svgl.app?search=anthropic"
 
-# Descargar SVG y convertir a PNG 256x256
-curl -sS "https://svgl.app/library/anthropic_white.svg" -o fuente/logos/anthropic.svg
-rsvg-convert -w 256 -h 256 --keep-aspect-ratio fuente/logos/anthropic.svg -o fuente/logos/anthropic.png
+# Descargar SVG
+curl -sS "https://svgl.app/library/anthropic_white.svg" -o recursos/logos/anthropic/anthropic.svg
+
+# Convertir SVG → PNG 512x512
+rsvg-convert -w 512 -h 512 --keep-aspect-ratio recursos/logos/anthropic/anthropic.svg -o recursos/logos/anthropic/anthropic.png
+
+# O descargar PNG directo de Dashboard Icons (ya viene 512x512)
+curl -sS -o recursos/logos/openclaw/openclaw.png "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/openclaw.png"
 ```
+
+**⚠️ No hay `fuente/logos/` por video.** Todo vive en el repo central compartido.
 
 ### 3. 🎬 Sergio revisa `fuente/transcription/overlay-logos.md`
 
@@ -118,15 +139,20 @@ fuente/
 ├── transcription/
 │   ├── transcription_original.json   ← INPUT (del Paso 5, NO tocar)
 │   └── overlay-logos.md              ← Detecciones para revisión (✅/❌)
-├── logos/                            ← PNGs descargados
-│   ├── anthropic.png
-│   ├── openai.png
-│   └── ...
 └── video/
-    └── 4_video_jumpcut.mp4           ← Video de entrada
+    └── 5_video_limpio.mp4            ← Video de entrada
+
+~/Documents/Edicion/Serudda/recursos/logos/   ← Repo central de logos (compartido)
+├── anthropic/
+│   ├── anthropic.svg
+│   └── anthropic.png
+├── openai/
+│   ├── openai.svg
+│   └── openai.png
+└── ...
 
 output/
-└── 4_video_jumpcut_logos.mp4         ← Video con logos
+└── 5_video_limpio_logos.mp4          ← Video con logos
 ```
 
 ---
@@ -158,18 +184,19 @@ Cada logo se aplica con:
 
 - `scale` → redimensiona al tamaño configurado
 - `format=rgba` → preserva transparencia del PNG
-- `fade` → fade in al inicio, fade out al final
 - `overlay` con `enable='between(t,start,end)'` → solo visible en el rango
 - Posición: esquina inferior derecha con padding
 - Logos solapados en tiempo se apilan verticalmente
+- **⚠️ NO usar `fade` con `alpha=1` en overlays encadenados** (ver nota abajo)
 
 ---
 
 ## Resolución de Logos (orden de prioridad)
 
 1. **SVGL API** — `curl -sS "https://api.svgl.app?search=nombre"`
-2. **Repo local** — `~/Documents/Edicion/Serudda/recursos/logos/` (~120 marcas en slug)
-3. **Manual** — Sergio lo busca y lo deja en `fuente/logos/`
+2. **Dashboard Icons** (jsDelivr CDN) — `curl -sS -o logo.png "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/nombre.png"` — +1000 logos tech, PNG 512x512 RGBA
+3. **Repo local** — `~/Documents/Edicion/Serudda/recursos/logos/` (~120 marcas en slug)
+4. **Manual** — Sergio lo busca y lo deja en `fuente/logos/`
 
 ---
 
@@ -179,44 +206,40 @@ Cada logo se aplica con:
 2. **Batches no funcionan.** Single pass es la solución.
 3. **3 segundos es la duración ideal.** 5s es demasiado largo.
 4. **El logo aparece cuando se dice la palabra, no antes.**
+5. **NO usar `fade` con `alpha=1` en overlays encadenados.** Ver nota importante abajo.
 
 ---
 
-## 🐛 Bug abierto: Logos no aparecen en video completo (Feb 19, 2026)
+## ⚠️ NOTA IMPORTANTE: Fade + overlays encadenados = logos invisibles (Resuelto Feb 24, 2026)
 
-### Síntoma
-El script genera el video (re-encodea completo, ~7 min, ~766MB) pero los logos NO aparecen visualmente en ningún timestamp. ffmpeg reporta stream mapping correcto con todos los overlays.
+### El problema
+Usar `fade=t=in:st=...:d=0.3:alpha=1` y `fade=t=out:st=...:d=0.3:alpha=1` en los filtros de escala de cada logo **hace que los logos no aparezcan** cuando hay 2 o más overlays encadenados en el filter_complex. El video se re-encodea completo (tamaño normal, sin errores en ffmpeg) pero los logos son invisibles.
 
-### Lo que SÍ funciona
-- **Clip corto (10s) con 1 logo** → logo visible ✅
-- **Video completo con 1 logo, comando manual single-line** → logo visible ✅
-  ```bash
-  ffmpeg -i video.mp4 -i logo.png -filter_complex "[1:v]scale=...;[0:v][logo]overlay=...:enable='between(t,105,108)'[out]" -map "[out]" -map 0:a -c:v libx264 -crf 18 -preset fast -c:a copy -y output.mp4
-  ```
+### Qué funciona y qué no
 
-### Lo que NO funciona
-- **Video completo con 12 logos via `logo-overlay.py`** → logos no aparecen ❌
-- Tanto con `subprocess.run(cmd_list)` como generando `.sh` + `bash script.sh`
-- Tanto con `enable='between(t,105,108)'` (comillas simples) como `enable=between(t\,105\,108)` (commas escapadas)
+| Escenario | Resultado |
+|-----------|-----------|
+| 1 logo, clip corto, con fade | ✅ Funciona |
+| 1 logo, video completo, sin fade | ✅ Funciona |
+| 2 logos, video completo, con fade | ❌ Logos invisibles |
+| 2 logos, video completo, sin fade | ✅ Funciona |
+| 7 logos, video completo, sin fade | ✅ Funciona |
 
-### Hipótesis descartadas
-- ❌ Timestamps incorrectos — transcripción coincide con duración del video (1030s ambos)
-- ❌ PTS del video descalibrado — `start_time: 0.021` (normal)
-- ❌ `-ss` reseteando timestamps — no se usa `-ss` en el script
-- ❌ Logos PNG corruptos — funcionan en test de clip corto
-- ❌ `\n` en filter_complex — eliminado, mismo resultado
-- ❌ `capture_output=True` ocultando errores — removido, mismo resultado
+### Causa probable
+El filtro `fade` con `alpha=1` aplicado sobre el stream del logo (antes del overlay) corrompe el canal alpha en overlays encadenados. Con 1 solo overlay no hay problema, pero al encadenar `[v0][s1]overlay...` el alpha corrupto se propaga y los logos posteriores (y a veces todos) se vuelven transparentes.
 
-### Hipótesis pendientes de investigar
-- **¿El encadenamiento de 12 overlays causa el problema?** El test de 1 logo manual funciona. Nunca se probó correctamente un comando manual con 2+ logos en video completo (los intentos previos se pegaron multi-línea desde Telegram y podrían haberse corrompido).
-- **¿Algo en el `.sh` generado vs el comando manual difiere sutilmente?** El `.sh` generado se ve idéntico al formato manual, pero no se ha probado corriendo el `.sh` manualmente con `bash`.
-- **¿El video `4_video_jumpcut.mp4` tiene algo especial?** Fue creado concatenando 160 segmentos .ts. Los timestamps podrían tener discontinuidades internas que confunden el `enable=between()` en overlays encadenados.
-- **¿Probar con `drawtext` como debug?** Poner un texto con timestamp visible en el video para confirmar qué valores tiene `t` en cada momento.
+### Solución
+**No usar fade en los logos.** Los logos aparecen y desaparecen de golpe — se ve bien en videos con cortes rápidos.
 
-### Próximo paso sugerido
-1. Probar corriendo `bash tmp/logo_overlay_cmd.sh` directamente en terminal (no via Python)
-2. Si no funciona, probar con solo 2 logos (no 12) en un `.sh` manual
-3. Si 2 logos no funcionan, probar `drawtext=text='%{pts}':fontsize=48` para ver timestamps reales del video
+**Alternativa futura:** Si se necesita fade, investigar el enfoque de **capa transparente pre-compositeada**: generar un video RGBA separado con todos los logos (incluyendo fades), y hacer un solo overlay sobre el video original. Esto evita el encadenamiento problemático.
+
+### Hipótesis descartadas durante el debugging
+- ❌ Timestamps incorrectos — PTS empieza en 0, coincide con duración del video
+- ❌ PTS descalibrado — `start_time: 0.000000`
+- ❌ Logos PNG corruptos — funcionan en test de 1 logo
+- ❌ Encadenamiento de overlays en sí — funciona sin fade
+- ❌ Script Python vs bash directo — mismo resultado
+- ❌ Comillas simples vs commas escapadas — mismo resultado
 
 ---
 
