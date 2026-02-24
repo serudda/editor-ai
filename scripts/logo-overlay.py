@@ -9,7 +9,6 @@ qué logos aplicar y en qué momentos. Los logos se buscan en el repo central:
 Uso:
   python3 logo-overlay.py <carpeta-del-video>
   python3 logo-overlay.py <carpeta-del-video> --dry-run
-  python3 logo-overlay.py <carpeta-del-video> --print-cmd
 
 Documentación completa: ../6_logo-overlay.md
 """
@@ -31,8 +30,19 @@ def parse_timestamp(ts):
     return 0.0
 
 
-def parse_overlay_md(filepath):
-    """Parsear overlay-logos.md y extraer detecciones marcadas con ✅."""
+def parse_overlay_md(filepath, logo_duration=3.0):
+    """Parsear overlay-logos.md y extraer detecciones marcadas con ✅.
+    
+    Acepta dos formatos:
+    
+    Formato nuevo (con transcripción limpia como base):
+        [0:00 - 0:17.56] (17.6s) El 50% de los trabajos... Antropic...
+        → anthropic.png | 0:08.60 | ✅
+    
+    Formato viejo (solo detecciones):
+        [0:08.60 - 0:11.60] "contexto"
+          → anthropic.png | ✅
+    """
     with open(filepath, "r") as f:
         lines = f.readlines()
 
@@ -47,10 +57,27 @@ def parse_overlay_md(filepath):
             current_end = parse_timestamp(ts_match.group(2))
             continue
 
-        logo_match = re.match(r'\s*→\s*(\S+)\.png\s*\|\s*(✅|❌)', line)
-        if logo_match and current_start is not None:
-            logo_file = logo_match.group(1)
-            approved = logo_match.group(2) == "✅"
+        # Formato nuevo: → logo.png | MM:SS.xx | ✅/❌
+        logo_match_new = re.match(r'\s*→\s*(\S+)\.png\s*\|\s*(\d+:\d+(?:\.\d+)?)\s*\|\s*(✅|❌)', line)
+        if logo_match_new:
+            logo_file = logo_match_new.group(1)
+            logo_start = parse_timestamp(logo_match_new.group(2))
+            approved = logo_match_new.group(3) == "✅"
+
+            if approved:
+                logo_end = logo_start + logo_duration
+                stack_level = 0
+                for prev_start, prev_end, _, _ in detections:
+                    if logo_start < prev_end and logo_end > prev_start:
+                        stack_level += 1
+                detections.append((logo_start, logo_end, logo_file, stack_level))
+            continue
+
+        # Formato viejo: → logo.png | ✅/❌
+        logo_match_old = re.match(r'\s*→\s*(\S+)\.png\s*\|\s*(✅|❌)', line)
+        if logo_match_old and current_start is not None:
+            logo_file = logo_match_old.group(1)
+            approved = logo_match_old.group(2) == "✅"
 
             if approved:
                 stack_level = 0
@@ -73,18 +100,17 @@ def format_time(seconds):
 def main():
     parser = argparse.ArgumentParser(description="Paso 6 — Logo Overlay")
     parser.add_argument("video_dir", help="Carpeta del video")
-    parser.add_argument("--video", default="4_video_jumpcut.mp4", help="Video de entrada (default: 4_video_jumpcut.mp4)")
+    parser.add_argument("--video", default="5_video_limpio.mp4", help="Video de entrada (default: 5_video_limpio.mp4)")
     parser.add_argument("--output", default=None, help="Video de salida (default: <video>_logos.mp4)")
-    parser.add_argument("--size", type=int, default=120, help="Tamaño del logo en px (default: 120)")
+    parser.add_argument("--size", type=int, default=250, help="Tamaño del logo en px (default: 250)")
     parser.add_argument("--padding", type=int, default=40, help="Padding del borde (default: 40)")
-    parser.add_argument("--padding-x", type=int, default=None, help="Padding horizontal (override --padding para X)")
-    parser.add_argument("--padding-y", type=int, default=None, help="Padding vertical (override --padding para Y)")
+    parser.add_argument("--padding-x", type=int, default=160, help="Padding horizontal (default: 160)")
+    parser.add_argument("--padding-y", type=int, default=80, help="Padding vertical (default: 80)")
     parser.add_argument("--position", default="top-left", choices=["top-left", "top-right", "bottom-left", "bottom-right"], help="Posición del logo (default: top-left)")
     parser.add_argument("--fade", type=float, default=0.0, help="[DESACTIVADO] Fade causa logos invisibles en overlays encadenados. Se ignora.")
     parser.add_argument("--crf", type=int, default=18, help="Calidad CRF (default: 18)")
     parser.add_argument("--preset", default="fast", help="Preset de encoding (default: fast)")
     parser.add_argument("--dry-run", action="store_true", help="Solo mostrar detecciones")
-    parser.add_argument("--print-cmd", action="store_true", help="Solo imprimir el comando")
 
     args = parser.parse_args()
 
@@ -199,13 +225,9 @@ def main():
         f.write(f' -c:a copy -y "{output_path}"\n')
     os.chmod(sh_file, 0o755)
 
-    if args.print_cmd:
-        print(f"\n📋 Comando en: {sh_file}\n")
-        with open(sh_file) as f:
-            print(f.read())
-        return
-
-    print(f"\n⚙️  Config: size={args.size}px | padding={args.padding}px | fade={args.fade}s | crf={args.crf}")
+    _px = args.padding_x if args.padding_x is not None else args.padding
+    _py = args.padding_y if args.padding_y is not None else args.padding
+    print(f"\n⚙️  Config: size={args.size}px | padding-x={_px}px | padding-y={_py}px | crf={args.crf}")
     print(f"\n🎬 Aplicando {len(detections)} logos...")
     print(f"   ⚠️  Tarda ~7-10 min para un video de 17 min.\n")
     print(f"📝 Script: {sh_file}\n")

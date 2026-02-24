@@ -12,37 +12,42 @@
 
 ### 1. 🌑 Sinistra detecta marcas en la transcripción
 
-Lee `transcription_original.json` (generado en Paso 5), busca menciones de marcas tech en las palabras con timestamps, y genera `fuente/transcription/overlay-logos.md`.
+Sinistra copia `transcription_limpia.md` → `overlay-logos.md`, luego busca marcas en `transcription_original.json` y agrega las detecciones debajo del segmento correspondiente.
 
-**NO vuelve a llamar a Whisper API.** La transcripción ya existe.
+**Proceso de detección:**
 
-**Proceso de traducción (lo hace Sinistra manualmente, no un script):**
-
-1. Abre `fuente/transcription/transcription_original.json`
-2. Recorre el array `words[]` buscando nombres de marcas tech (OpenAI, Anthropic, Google, Claude, etc.)
-3. Por cada marca encontrada, toma el `start` de esa palabra como timestamp exacto
-4. Genera una entrada en `overlay-logos.md` con formato:
+1. Abre `transcription_original.json`
+2. Recorre el array `words[]` buscando nombres de marcas tech:
+   ```python
+   brands = ['openai', 'anthropic', 'claude', 'cloudy', 'chatgpt', 'gemini', 'openclaw', ...]
+   for word in transcription['words']:
+       if any(brand in word['word'].lower() for brand in brands):
+           print(f"{word['start']} | {word['word']}")
    ```
-   [MM:SS - MM:SS] "contexto de la frase donde aparece la marca"
-     → nombre-logo.png | ✅
+3. Por cada marca encontrada, toma `word.start` como timestamp exacto
+4. Agrega debajo del segmento en `overlay-logos.md`:
    ```
-   Donde el primer timestamp = `word.start` y el segundo = `word.start + 3s` (duración del logo)
+   → nombre.png | MM:SS.xx | ✅
+   ```
 5. Marca todas como ✅ por defecto — Sergio decide cuáles quitar
+6. Pre-marca como ❌ repeticiones cercanas (ej: "Claude" 3 veces en 30s → solo primera ✅)
 
-**Ejemplo concreto de la traducción:**
+**Ejemplo:**
 
 JSON (input):
 ```json
-{ "word": "OpenAI", "start": 5.10, "end": 5.58 }
+{ "word": "OpenAI", "start": 202.69, "end": 203.15 }
 ```
 
 overlay-logos.md (output):
 ```
-[0:05 - 0:08] "algo aún más fuerte OpenAI los creadores de ChatGPT"
-  → openai.png | ✅
+[3:22.11 - 3:44.25] (22.1s) OpenAI, los creadores de ChatGPT, confirmaron...
+→ openai.png | 3:22.69 | ✅
 ```
 
-**¿Por qué no es un script?** Porque la detección de marcas requiere criterio: "Apple" puede ser la empresa o la fruta, "Meta" puede ser la empresa o la palabra "meta". Sinistra usa contexto de la frase para decidir. Un script regex tendría muchos falsos positivos.
+El logo aparece 3 segundos desde el timestamp exacto de la palabra.
+
+**¿Por qué no es un script?** Porque la detección requiere criterio: "Apple" puede ser empresa o fruta, "Meta" puede ser empresa o la palabra "meta". Sinistra usa contexto para decidir.
 
 ### 2. 🌑 Sinistra descarga logos al repo central
 
@@ -88,13 +93,28 @@ curl -sS -o recursos/logos/openclaw/openclaw.png "https://cdn.jsdelivr.net/gh/ho
 
 Solo cambia ✅ ↔ ❌. Nada más.
 
-```
-[5:10 - 5:13] "algo aún más fuerte OpenAI los creadores de ChatGPT"
-  → openai.png | ✅
+**Formato nuevo (basado en transcription_limpia.md):**
 
-[5:12 - 5:15] "OpenAI los creadores de ChatGPT confirmaron en su documentación"
-  → chatgpt.png | ❌
 ```
+[3:22.11 - 3:44.25] (22.1s) OpenAI, los creadores de ChatGPT, confirmaron...
+→ openai.png | 3:22.69 | ✅
+→ chatgpt.png | 3:24.01 | ❌
+
+[3:44.25 - 3:58.57] (14.3s) Darío Amodei, el CEO de Antropic, dice...
+→ anthropic.png | 3:52.15 | ✅
+```
+
+Cada marca tiene: `→ logo.png | timestamp_exacto | ✅/❌`
+- El timestamp es el momento word-level en que se dice la marca
+- El logo aparece 3 segundos desde ese timestamp
+
+**Formato viejo (retrocompatible):**
+```
+[5:10 - 5:13] "contexto de la frase"
+  → openai.png | ✅
+```
+
+El script acepta ambos formatos.
 
 **Tips para la revisión:**
 
@@ -109,7 +129,7 @@ Solo cambia ✅ ↔ ❌. Nada más.
 python3 scripts/logo-overlay.py $VIDEO --dry-run
 
 # Solo ver el comando ffmpeg que generaría
-python3 scripts/logo-overlay.py $VIDEO --print-cmd
+python3 scripts/logo-overlay.py $VIDEO
 
 # Generar el video (tarda ~10-20 min para 17 min de video)
 python3 scripts/logo-overlay.py $VIDEO
@@ -120,15 +140,15 @@ python3 scripts/logo-overlay.py $VIDEO --size 150 --padding 50
 
 | Flag | Default | Qué hace |
 |------|---------|----------|
-| `--video` | 4_video_jumpcut.mp4 | Video de entrada |
-| `--output` | `<video>_logos.mp4` | Video de salida (en output/) |
-| `--size` | 120 | Tamaño del logo en px |
-| `--padding` | 40 | Padding del borde en px |
+| `--video` | `5_video_limpio.mp4` | Video de entrada |
+| `--output` | `6_video_limpio_logos.mp4` | Video de salida |
+| `--size` | 250 | Tamaño del logo en px |
+| `--padding-x` | 160 | Padding horizontal en px |
+| `--padding-y` | 80 | Padding vertical en px |
 | `--fade` | 0.3 | Fade in/out en segundos |
 | `--duration` | 3 | Duración del logo en pantalla (segundos) |
 | `--crf` | 18 | Calidad de video |
 | `--dry-run` | — | Solo muestra detecciones |
-| `--print-cmd` | — | Solo imprime el comando ffmpeg |
 
 ---
 
