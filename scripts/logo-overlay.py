@@ -77,6 +77,8 @@ def main():
     parser.add_argument("--output", default=None, help="Video de salida (default: <video>_logos.mp4)")
     parser.add_argument("--size", type=int, default=120, help="Tamaño del logo en px (default: 120)")
     parser.add_argument("--padding", type=int, default=40, help="Padding del borde (default: 40)")
+    parser.add_argument("--padding-x", type=int, default=None, help="Padding horizontal (override --padding para X)")
+    parser.add_argument("--padding-y", type=int, default=None, help="Padding vertical (override --padding para Y)")
     parser.add_argument("--position", default="top-left", choices=["top-left", "top-right", "bottom-left", "bottom-right"], help="Posición del logo (default: top-left)")
     parser.add_argument("--fade", type=float, default=0.0, help="[DESACTIVADO] Fade causa logos invisibles en overlays encadenados. Se ignora.")
     parser.add_argument("--crf", type=int, default=18, help="Calidad CRF (default: 18)")
@@ -100,10 +102,7 @@ def main():
     if args.output:
         output_path = os.path.join(video_out_dir, args.output)
     else:
-        # Siguiente número en la secuencia (0_, 1_, 2_, ...)
-        existing = [f for f in os.listdir(video_out_dir) if re.match(r'^\d+_', f)]
-        next_num = max((int(re.match(r'^(\d+)_', f).group(1)) for f in existing), default=-1) + 1
-        output_path = os.path.join(video_out_dir, f"{next_num}_video_limpio_logos.mp4")
+        output_path = os.path.join(video_out_dir, "6_video_limpio_logos.mp4")
 
     if not os.path.isfile(video_path):
         print(f"❌ Video no encontrado: {video_path}")
@@ -158,20 +157,22 @@ def main():
         sl = f"s{i}"
         vl = f"v{i}"
         y_offset = (args.size + 10) * stack_level
+        pad_x = args.padding_x if args.padding_x is not None else args.padding
+        pad_y = args.padding_y if args.padding_y is not None else args.padding
 
         # Posición según --position
         if args.position == "top-left":
-            pos_x = str(args.padding)
-            pos_y = str(args.padding + y_offset) if stack_level == 0 else f"{args.padding}+{y_offset}"
+            pos_x = str(pad_x)
+            pos_y = str(pad_y + y_offset) if stack_level == 0 else f"{pad_y}+{y_offset}"
         elif args.position == "top-right":
-            pos_x = f"W-{args.size}-{args.padding}"
-            pos_y = str(args.padding + y_offset) if stack_level == 0 else f"{args.padding}+{y_offset}"
+            pos_x = f"W-{args.size}-{pad_x}"
+            pos_y = str(pad_y + y_offset) if stack_level == 0 else f"{pad_y}+{y_offset}"
         elif args.position == "bottom-left":
-            pos_x = str(args.padding)
-            pos_y = f"H-{args.size}-{args.padding}" if stack_level == 0 else f"H-{args.size}-{args.padding}-{y_offset}"
+            pos_x = str(pad_x)
+            pos_y = f"H-{args.size}-{pad_y}" if stack_level == 0 else f"H-{args.size}-{pad_y}-{y_offset}"
         else:  # bottom-right
-            pos_x = f"W-{args.size}-{args.padding}"
-            pos_y = f"H-{args.size}-{args.padding}" if stack_level == 0 else f"H-{args.size}-{args.padding}-{y_offset}"
+            pos_x = f"W-{args.size}-{pad_x}"
+            pos_y = f"H-{args.size}-{pad_y}" if stack_level == 0 else f"H-{args.size}-{pad_y}-{y_offset}"
 
         # ⚠️ NO usar fade con alpha=1 en overlays encadenados — hace los logos invisibles.
         # Ver 6_logo-overlay.md → "NOTA IMPORTANTE" para detalles.
