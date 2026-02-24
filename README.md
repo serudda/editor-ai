@@ -15,13 +15,15 @@ editor-ai/
 ├── 4_eliminar-silencios.md            ← Paso 4
 ├── 5_generar-transcripcion.md                 ← Paso 5
 ├── 6_logo-overlay.md                  ← Paso 6
+├── 7_text-overlay.md                  ← Paso 7
 └── scripts/
     ├── sync-audio.py                  ← Script Paso 1
     ├── denoise.py                     ← Script Paso 2
     ├── color-grade.py                 ← Script Paso 3
     ├── jump-cut.py                    ← Script Paso 4
     ├── transcribe.py                  ← Script Paso 5
-    └── logo-overlay.py               ← Script Paso 6
+    ├── logo-overlay.py               ← Script Paso 6
+    └── text-overlay.py               ← Script Paso 7
 ```
 
 ## Estructura de cada video
@@ -45,7 +47,8 @@ YYYY-MM-DD_nombre-del-video/
 │   ├── transcription/                      ← Transcripciones y overlays
 │   │   ├── transcription_original.json     ← Paso 5: Whisper word-level (FUENTE DE VERDAD)
 │   │   ├── overlay-logos.md                ← Paso 6: Detecciones de logos (✅/❌)
-│   │   ├── overlay-broll.md                ← Paso 7: Inserciones de B-Roll (✅/❌)
+│   │   ├── overlay-text.md                 ← Paso 7: Frases para text cards (>>>)
+│   │   ├── overlay-broll.md                ← Paso 8: Inserciones de B-Roll (✅/❌)
 │   │   └── overlay-images.md              ← Futuro: Imágenes/GIFs
 │   └── logos/                              ← Logos descargados para este video
 │       ├── openai.png
@@ -226,9 +229,67 @@ Detecta marcas mencionadas en la transcripción y superpone sus logos.
 
 ---
 
+### Paso 7 — Text Overlay (Black Cards)
+
+**Doc:** [7_text-overlay.md](7_text-overlay.md) · **Script:** [`scripts/text-overlay.py`](scripts/text-overlay.py)
+
+Superpone pantallas negras con texto blanco centrado en momentos clave — estilo Dan Koe. El audio sigue sonando debajo.
+
+- [ ] 🌑 **Sinistra** genera `fuente/transcription/overlay-text.md` a partir de `transcription_original.json`
+  - Transcripción segmentada por frases con timestamps legibles
+  - ⚠️ Fuente de verdad = transcripción Whisper, NUNCA el guión del teleprompter
+- [ ] 🎬 **Sergio** abre `overlay-text.md` en Obsidian y marca frases con `>>>`:
+  ```markdown
+  [0:32.96 - 0:34.72] Porque me estaba volviendo obsoleto.
+  >>> Porque me estaba
+  volviendo obsoleto
+  ```
+  - El texto después de `>>>` es lo que aparece en pantalla
+  - Saltos de línea = saltos de línea en pantalla
+  - Para frases seguidas sin gap (negro continuo), agrupar con `===`:
+    ```markdown
+    ===
+    >>> Primera frase
+    >>> Segunda frase
+    >>> Tercera frase
+    ===
+    ```
+- [ ] 🌑 **Sinistra** corre dry-run para verificar timestamps:
+  ```bash
+  python3 scripts/text-overlay.py $VIDEO --dry-run
+  ```
+- [ ] 🌑 **Sinistra** genera el comando:
+  ```bash
+  python3 scripts/text-overlay.py $VIDEO --print-cmd
+  ```
+- [ ] 🎬 **Sergio** corre el render:
+  ```bash
+  bash $VIDEO/tmp/text_overlay_cmd.sh
+  ```
+- [ ] 🎬 **Sergio** revisa `fuente/video/7_video_text_overlay.mp4` — ¿texto legible, bien posicionado, timing correcto?
+
+**Flags útiles:**
+
+| Flag             | Default                                  | Qué hace                          |
+| ---------------- | ---------------------------------------- | --------------------------------- |
+| `--video`        | `6_video_limpio_logos.mp4`               | Video de entrada                  |
+| `--output`       | `7_video_text_overlay.mp4`               | Video de salida                   |
+| `--font`         | `/System/Library/Fonts/Helvetica.ttc`    | Ruta a la fuente                  |
+| `--fontsize`     | `64`                                     | Tamaño de fuente en px            |
+| `--min-duration` | `3.0`                                    | Segundos mínimos en pantalla      |
+| `--pad-before`   | `0.3`                                    | Padding antes de la frase (s)     |
+| `--pad-after`    | `0.5`                                    | Padding después de la frase (s)   |
+| `--crf`          | `18`                                     | Calidad de video (menor = mejor)  |
+| `--dry-run`      | —                                        | Solo muestra detecciones          |
+| `--print-cmd`    | —                                        | Genera `.sh` e imprime, no ejecuta |
+
+**⚠️ Cuidado con caracteres especiales:** El script escapa `%` automáticamente (`\%` para ffmpeg). Si ves pantalla negra sin texto, revisar que no haya un carácter sin escapar. Ver la doc completa en `7_text-overlay.md` → sección "Bugs conocidos".
+
+---
+
 ## Dependencias
 
-- `ffmpeg` + `ffprobe` — procesamiento de audio/video
+- `ffmpeg` + `ffprobe` — procesamiento de audio/video (⚠️ Paso 7 requiere `drawtext`: instalar desde `homebrew-ffmpeg/ffmpeg` tap, no el estándar)
 - `python3` — scripts de automatización
 - `numpy` + `scipy` — cross-correlation (Paso 1)
 - `rsvg-convert` — conversión SVG → PNG (`brew install librsvg`)
