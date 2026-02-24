@@ -10,7 +10,6 @@ Requiere ffmpeg compilado con --enable-libfreetype (drawtext filter).
 Uso:
   python3 text-overlay.py <carpeta-del-video>
   python3 text-overlay.py <carpeta-del-video> --dry-run
-  python3 text-overlay.py <carpeta-del-video> --print-cmd
 
 Documentación completa: ../7_text-overlay.md
 """
@@ -162,15 +161,13 @@ def parse_overlay_text_md(filepath):
 
 
 def escape_drawtext(text):
-    """Escapar texto para drawtext de ffmpeg dentro de un .sh."""
+    """Escapar texto para drawtext de ffmpeg."""
     # ffmpeg drawtext necesita escapar: ', \, :, ;
     text = text.replace('\\', '\\\\')
     text = text.replace("'", "'\\''")
     text = text.replace(':', '\\:')
     text = text.replace(';', '\\;')
     text = text.replace('%', '\\%')
-    # $ se interpreta como variable en bash dentro de double quotes
-    text = text.replace('$', '\\$')
     return text
 
 
@@ -180,14 +177,13 @@ def main():
     parser.add_argument("--video", default="6_video_limpio_logos.mp4", help="Video de entrada (default: 6_video_limpio_logos.mp4)")
     parser.add_argument("--output", default=None, help="Video de salida")
     parser.add_argument("--font", default=os.path.expanduser("~/Documents/Edicion/Serudda/recursos/fuentes/default.ttf"), help="Ruta a la fuente (default: recursos/fuentes/default.ttf)")
-    parser.add_argument("--fontsize", type=int, default=64, help="Tamaño de fuente (default: 64)")
+    parser.add_argument("--fontsize", type=int, default=56, help="Tamaño de fuente (default: 56)")
     parser.add_argument("--min-duration", type=float, default=0.0, help="Duración mínima en pantalla en segundos (default: 0 = dura lo que la frase)")
     parser.add_argument("--pad-before", type=float, default=0.3, help="Padding antes de la frase (default: 0.3s)")
     parser.add_argument("--pad-after", type=float, default=0.0, help="Padding después de la frase (default: 0 = corta al terminar)")
     parser.add_argument("--crf", type=int, default=18, help="Calidad CRF (default: 18)")
     parser.add_argument("--preset", default="fast", help="Preset de encoding (default: fast)")
     parser.add_argument("--dry-run", action="store_true", help="Solo mostrar detecciones")
-    parser.add_argument("--print-cmd", action="store_true", help="Solo imprimir el comando")
     
     args = parser.parse_args()
     
@@ -209,8 +205,62 @@ def main():
         print(f"❌ Video no encontrado: {video_path}")
         sys.exit(1)
     if not os.path.isfile(overlay_md):
-        print(f"❌ overlay-text.md no encontrado: {overlay_md}")
-        sys.exit(1)
+        # Si no existe overlay-text.md, copiar desde transcription_limpia.md con header de instrucciones
+        limpia_md = os.path.join(video_dir, "fuente", "transcription", "transcription_limpia.md")
+        if os.path.isfile(limpia_md):
+            header = """# Overlay Text
+#
+# Copiado de transcription_limpia.md — marca frases con >>> para text cards.
+#
+# INSTRUCCIONES:
+# Para marcar una text card, agrega >>> debajo del segmento.
+# El texto después de >>> es EXACTAMENTE lo que aparece en pantalla.
+# Saltos de línea después de >>> = saltos de línea en pantalla.
+# El script busca esas palabras en la transcripción word-level para timing exacto.
+#
+# BLOQUES CONTINUOS:
+# Usa === para agrupar varias >>> en un overlay negro continuo.
+# Cada >>> dentro del bloque es un cambio de texto (el negro no desaparece).
+#
+# Ejemplo card suelta:
+# [0:32.96 - 0:34.72] (1.8s) Porque me estaba volviendo obsoleto.
+# >>> Porque me estaba
+# volviendo obsoleto
+#
+# Ejemplo bloque (negro continuo, texto va cambiando):
+# [0:00 - 0:17.56] (17.6s) El 50% de los trabajos...
+# ===
+# >>> El 50% de los trabajos de oficina
+# van a desaparecer en menos de 5 años
+# >>> Lo dice Darío Amodei,
+# CEO de Anthropic
+# ===
+
+"""
+            with open(limpia_md, 'r') as f:
+                # Saltar el header original de la limpia (líneas que empiezan con #)
+                limpia_lines = f.readlines()
+            
+            content_lines = []
+            past_header = False
+            for line in limpia_lines:
+                if not past_header and line.startswith('#'):
+                    continue
+                if not past_header and line.strip() == '':
+                    continue
+                past_header = True
+                content_lines.append(line)
+            
+            with open(overlay_md, 'w') as f:
+                f.write(header)
+                f.writelines(content_lines)
+            
+            print(f"📋 overlay-text.md creado desde transcription_limpia.md")
+            print(f"   → Abrilo y marcá frases con >>> antes de renderizar\n")
+        else:
+            print(f"❌ No existe overlay-text.md ni transcription_limpia.md")
+            print(f"   Corré primero: python3 scripts/transcribe.py $VIDEO")
+            sys.exit(1)
     if not os.path.isfile(transcription_json):
         print(f"❌ transcription_original.json no encontrado: {transcription_json}")
         sys.exit(1)
@@ -288,7 +338,7 @@ def main():
         print("🏁 Dry run — no se generó video.")
         return
     
-    # Generar archivos de texto para cada card (textfile= maneja newlines nativamente)
+    # Generar archivos de texto para cada card
     cards_dir = os.path.join(tmp_dir, "text_cards")
     os.makedirs(cards_dir, exist_ok=True)
     
@@ -300,7 +350,7 @@ def main():
         
         # Escribir texto a archivo, escapando % para drawtext
         card_file = os.path.join(cards_dir, f"card_{idx:03d}.txt")
-        escaped_text = card['display_text'].replace('%', '\\%')
+        escaped_text = card['display_text'].replace('%', '％')  # fullwidth % (U+FF05) — ffmpeg drawtext trata % como función
         with open(card_file, 'w') as f:
             f.write(escaped_text)
         
@@ -322,26 +372,18 @@ def main():
     
     fc = ','.join(filters)
     
-    # Escribir .sh
-    sh_file = os.path.join(tmp_dir, "text_overlay_cmd.sh")
-    with open(sh_file, 'w') as f:
-        f.write("#!/bin/bash\nset -e\n")
-        f.write(f'ffmpeg -i "{video_path}" '
-                f'-vf "{fc}" '
-                f'-c:v libx264 -crf {args.crf} -preset {args.preset} '
-                f'-c:a copy -y "{output_path}"\n')
-    os.chmod(sh_file, 0o755)
-    
-    if args.print_cmd:
-        print(f"📋 Comando en: {sh_file}\n")
-        with open(sh_file) as f:
-            print(f.read())
-        return
+    cmd = [
+        "ffmpeg",
+        "-i", video_path,
+        "-vf", fc,
+        "-c:v", "libx264", "-crf", str(args.crf), "-preset", args.preset,
+        "-c:a", "copy", "-y", output_path
+    ]
     
     print(f"🎬 Aplicando {len(cards)} text cards...")
-    print(f"📝 Script: {sh_file}\n")
+    print(f"📤 Output: {output_path}\n")
     
-    result = subprocess.run(["bash", sh_file])
+    result = subprocess.run(cmd)
     
     if result.returncode != 0:
         print(f"\n❌ Error (código {result.returncode})")
