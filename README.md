@@ -45,11 +45,12 @@ YYYY-MM-DD_nombre-del-video/
 │   │   ├── 3_video_color_grade.mp4           ← Paso 3: color cinematográfico
 │   │   └── 4_video_jumpcut.mp4               ← Paso 4: silencios eliminados
 │   ├── transcription/                      ← Transcripciones y overlays
-│   │   ├── transcription_original.json     ← Paso 5: Whisper word-level (FUENTE DE VERDAD)
-│   │   ├── overlay-logos.md                ← Paso 6: Detecciones de logos (✅/❌)
-│   │   ├── overlay-text.md                 ← Paso 7: Frases para text cards (>>>)
-│   │   ├── overlay-broll.md                ← Paso 8: Inserciones de B-Roll (✅/❌)
-│   │   └── overlay-images.md              ← Futuro: Imágenes/GIFs
+│   │   ├── transcription_original.json     ← Paso 5: Whisper word-level (FUENTE DE VERDAD, no tocar)
+│   │   ├── transcription_limpia.md         ← Paso 5: Versión legible (BASE para todos los overlays)
+│   │   ├── overlay-logos.md                ← Paso 6: Copia de limpia + detecciones de logos (✅/❌)
+│   │   ├── overlay-text.md                 ← Paso 7: Copia de limpia + marcas de text cards (>>>)
+│   │   ├── overlay-broll.md                ← Paso 8: Copia de limpia + inserciones de B-Roll
+│   │   └── overlay-images.md              ← Futuro: Copia de limpia + imágenes/GIFs
 │   └── logos/                              ← Logos descargados para este video
 │       ├── openai.png
 │       └── ...
@@ -186,15 +187,19 @@ Genera la transcripción cruda con timestamps a nivel de palabra. Es la **fuente
   python3 scripts/transcribe.py $VIDEO
   ```
 - [ ] 🌑 **Sinistra** confirma que `fuente/transcription/transcription_original.json` tiene words + segments
+- [ ] 🌑 **Sinistra** confirma que `fuente/transcription/transcription_limpia.md` se generó (se crea automáticamente)
+  - Este archivo es la **base para todos los overlays** (text, logos, broll, images)
+  - Si necesitás regenerarla sin re-transcribir: `python3 scripts/transcribe.py $VIDEO --clean-only`
 
 **Flags útiles:**
 
-| Flag           | Default             | Qué hace                           |
-| -------------- | ------------------- | ---------------------------------- |
-| `--input`      | 4_video_jumpcut.mp4 | Video de entrada                   |
-| `--language`   | es                  | Idioma del audio                   |
-| `--audio-only` | —                   | Solo extraer audio, no transcribir |
-| `--dry-run`    | —                   | Muestra qué haría sin ejecutar     |
+| Flag           | Default             | Qué hace                                                  |
+| -------------- | ------------------- | --------------------------------------------------------- |
+| `--input`      | 4_video_jumpcut.mp4 | Video de entrada                                          |
+| `--language`   | es                  | Idioma del audio                                          |
+| `--audio-only` | —                   | Solo extraer audio, no transcribir                        |
+| `--clean-only` | —                   | Solo regenerar `transcription_limpia.md` desde JSON existente |
+| `--dry-run`    | —                   | Muestra qué haría sin ejecutar                            |
 
 ---
 
@@ -204,9 +209,14 @@ Genera la transcripción cruda con timestamps a nivel de palabra. Es la **fuente
 
 Detecta marcas mencionadas en la transcripción y superpone sus logos.
 
-- [ ] 🌑 **Sinistra** detecta marcas en `transcription_original.json` y genera `fuente/transcription/overlay-logos.md`
-- [ ] 🌑 **Sinistra** descarga logos (SVGL API → repo local → manual)
-- [ ] 🎬 **Sergio** revisa `fuente/transcription/overlay-logos.md` y marca ✅/❌ en cada detección
+- [ ] 🌑 **Sinistra** crea `overlay-logos.md` copiando `transcription_limpia.md` (si no existe)
+- [ ] 🌑 **Sinistra** detecta marcas en la transcripción y agrega debajo de cada segmento:
+  ```
+  → nombre.png | MM:SS.xx | ✅
+  ```
+  (timestamp exacto word-level de cuando se menciona la marca)
+- [ ] 🌑 **Sinistra** descarga logos (SVGL API → Dashboard Icons → repo local → manual)
+- [ ] 🎬 **Sergio** revisa `overlay-logos.md` y cambia ✅/❌ en cada detección
   - Quitar repeticiones (ej: si dice "OpenAI" 5 veces en 30s, dejar solo la primera)
   - Quitar falsos positivos
 - [ ] 🌑 **Sinistra** confirma que todos los logos ✅ están en `fuente/logos/` como PNG
@@ -225,7 +235,6 @@ Detecta marcas mencionadas en la transcripción y superpone sus logos.
 | `--padding`   | 40                  | Padding del borde en px        |
 | `--fade`      | 0.3                 | Fade in/out en segundos        |
 | `--dry-run`   | —                   | Solo muestra detecciones       |
-| `--print-cmd` | —                   | Solo imprime el comando ffmpeg |
 
 ---
 
@@ -235,10 +244,11 @@ Detecta marcas mencionadas en la transcripción y superpone sus logos.
 
 Superpone pantallas negras con texto blanco centrado en momentos clave — estilo Dan Koe. El audio sigue sonando debajo.
 
-- [ ] 🌑 **Sinistra** genera `fuente/transcription/overlay-text.md` a partir de `transcription_original.json`
-  - Transcripción segmentada por frases con timestamps legibles
-  - ⚠️ Fuente de verdad = transcripción Whisper, NUNCA el guión del teleprompter
-- [ ] 🎬 **Sergio** abre `overlay-text.md` en Obsidian y marca frases con `>>>`:
+- [ ] 🌑 **Sinistra** corre dry-run — si `overlay-text.md` no existe, se copia automáticamente de `transcription_limpia.md` (Paso 5):
+  ```bash
+  python3 scripts/text-overlay.py $VIDEO --dry-run
+  ```
+- [ ] 🎬 **Sergio** abre `overlay-text.md` en Antigravity (format on save desactivado) y marca frases con `>>>`:
   ```markdown
   [0:32.96 - 0:34.72] Porque me estaba volviendo obsoleto.
   >>> Porque me estaba
@@ -258,13 +268,9 @@ Superpone pantallas negras con texto blanco centrado en momentos clave — estil
   ```bash
   python3 scripts/text-overlay.py $VIDEO --dry-run
   ```
-- [ ] 🌑 **Sinistra** genera el comando:
-  ```bash
-  python3 scripts/text-overlay.py $VIDEO --print-cmd
-  ```
 - [ ] 🎬 **Sergio** corre el render:
   ```bash
-  bash $VIDEO/tmp/text_overlay_cmd.sh
+  python3 scripts/text-overlay.py $VIDEO
   ```
 - [ ] 🎬 **Sergio** revisa `fuente/video/7_video_text_overlay.mp4` — ¿texto legible, bien posicionado, timing correcto?
 
@@ -274,14 +280,13 @@ Superpone pantallas negras con texto blanco centrado en momentos clave — estil
 | ---------------- | ---------------------------------------- | --------------------------------- |
 | `--video`        | `6_video_limpio_logos.mp4`               | Video de entrada                  |
 | `--output`       | `7_video_text_overlay.mp4`               | Video de salida                   |
-| `--font`         | `/System/Library/Fonts/Helvetica.ttc`    | Ruta a la fuente                  |
+| `--font`         | `recursos/fuentes/default.ttf`           | Ruta a la fuente (Source Serif Bold) |
 | `--fontsize`     | `64`                                     | Tamaño de fuente en px            |
 | `--min-duration` | `3.0`                                    | Segundos mínimos en pantalla      |
 | `--pad-before`   | `0.3`                                    | Padding antes de la frase (s)     |
 | `--pad-after`    | `0.5`                                    | Padding después de la frase (s)   |
 | `--crf`          | `18`                                     | Calidad de video (menor = mejor)  |
 | `--dry-run`      | —                                        | Solo muestra detecciones          |
-| `--print-cmd`    | —                                        | Genera `.sh` e imprime, no ejecuta |
 
 **⚠️ Cuidado con caracteres especiales:** El script escapa `%` automáticamente (`\%` para ffmpeg). Si ves pantalla negra sin texto, revisar que no haya un carácter sin escapar. Ver la doc completa en `7_text-overlay.md` → sección "Bugs conocidos".
 

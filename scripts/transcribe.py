@@ -127,6 +127,127 @@ def transcribe_audio(audio_path: Path, api_key: str, model: str, language: str, 
     return data
 
 
+def format_ts(seconds):
+    """Formatear segundos a M:SS.xx"""
+    m = int(seconds // 60)
+    s = seconds % 60
+    if s == int(s):
+        return f"{m}:{int(s):02d}"
+    return f"{m}:{s:05.2f}"
+
+
+def merge_segments(segments, max_duration=20.0):
+    """Reagrupa segmentos de Whisper en frases completas.
+    
+    Whisper corta segmentos por tiempo, no por gramática. Esto produce frases
+    cortadas a mitad de oración. Esta función junta segmentos consecutivos hasta
+    encontrar un final natural de frase (., ?, !, :) o hasta alcanzar max_duration.
+    
+    Resultado: bloques de ~5-20s con frases completas, sin palabras cortadas.
+    """
+    import re
+    
+    if not segments:
+        return []
+    
+    # Patrones que indican final de frase
+    end_pattern = re.compile(r'[.?!:。？！]$')
+    
+    merged = []
+    current_start = segments[0].get("start", 0)
+    current_texts = []
+    current_end = segments[0].get("end", 0)
+    
+    for i, seg in enumerate(segments):
+        text = seg.get("text", "").strip()
+        end = seg.get("end", 0)
+        start = seg.get("start", 0)
+        
+        # Mirar si el SIGUIENTE segmento es muy corto (remate de frase)
+        next_is_short = False
+        if i + 1 < len(segments):
+            next_seg = segments[i + 1]
+            next_dur = next_seg.get("end", 0) - next_seg.get("start", 0)
+            next_is_short = next_dur < 3.0
+        
+        # Si agregar este segmento excedería max_duration, cerrar el actual
+        # PERO no cortar si el segmento actual es un remate corto del anterior
+        seg_duration = end - start if start > 0 else end
+        is_short_tail = seg_duration < 3.0 and current_texts
+        
+        if current_texts and (end - current_start) > max_duration and not is_short_tail:
+            merged.append({
+                "start": current_start,
+                "end": current_end,
+                "text": " ".join(current_texts)
+            })
+            current_start = start
+            current_texts = []
+        
+        current_texts.append(text)
+        current_end = end
+        
+        # Si termina en puntuación final Y el siguiente no es un remate corto, cerrar
+        if end_pattern.search(text) and not next_is_short:
+            merged.append({
+                "start": current_start,
+                "end": current_end,
+                "text": " ".join(current_texts)
+            })
+            current_start = end
+            current_texts = []
+    
+    # Último bloque si quedó algo
+    if current_texts:
+        merged.append({
+            "start": current_start,
+            "end": current_end,
+            "text": " ".join(current_texts)
+        })
+    
+    return merged
+
+
+def generate_clean_transcription(data, video_name, output_path):
+    """Genera transcription_limpia.md — transcripción legible con timestamps.
+    
+    Este archivo es la BASE para todos los overlays (text, logos, broll, images).
+    Cada paso copia este archivo y agrega sus propias marcas.
+    
+    Proceso:
+    1. Toma los segmentos de Whisper (que cortan a mitad de frase)
+    2. Los reagrupa en frases completas (~5-20s, cortando en puntuación)
+    3. Genera un markdown legible con timestamps e instrucciones
+    """
+    segments = data.get("segments", [])
+    words = data.get("words", [])
+    duration_s = data.get("duration", 0)
+
+    # Reagrupar segmentos en frases completas
+    merged = merge_segments(segments, max_duration=20.0)
+    
+    lines = []
+    lines.append(f"# Transcripción Limpia — {video_name}")
+    lines.append(f"#")
+    lines.append(f"# Generado automáticamente por transcribe.py (Paso 5)")
+    lines.append(f"# Duración: {format_ts(duration_s)} ({int(duration_s)}s)")
+    lines.append(f"# Palabras: {len(words)} | Segmentos originales: {len(segments)} | Reagrupados: {len(merged)}")
+    lines.append(f"#")
+    lines.append(f"# No editar directamente. Regenerar: python3 scripts/transcribe.py $VIDEO --clean-only")
+    lines.append("")
+
+    for seg in merged:
+        start = seg["start"]
+        end = seg["end"]
+        text = seg["text"]
+        duration = end - start
+
+        lines.append(f"[{format_ts(start)} - {format_ts(end)}] ({duration:.1f}s) {text}")
+        lines.append("")
+
+    output_path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Paso 5 — Transcripción Word-Level (Whisper API)")
     parser.add_argument("video_dir", help="Carpeta del video")
@@ -135,6 +256,7 @@ def main():
     parser.add_argument("--model", default="whisper-1", help="Modelo de Whisper")
     parser.add_argument("--language", default="es", help="Idioma del audio")
     parser.add_argument("--audio-only", action="store_true", help="Solo extraer audio, no transcribir")
+    parser.add_argument("--clean-only", action="store_true", help="Solo regenerar transcription_limpia.md desde el JSON existente")
     parser.add_argument("--dry-run", action="store_true", help="Mostrar qué haría sin ejecutar")
 
     args = parser.parse_args()
@@ -165,6 +287,17 @@ def main():
     print(f"📄 Output: {output_path.relative_to(video_dir)}")
     print()
 
+    # Modo --clean-only: solo regenerar transcription_limpia.md
+    if args.clean_only:
+        if not output_path.exists():
+            print(f"❌ No existe {output_path.name}. Corre primero la transcripción completa.", file=sys.stderr)
+            sys.exit(1)
+        data = json.loads(output_path.read_text())
+        limpia_path = transcripcion_dir / "transcription_limpia.md"
+        generate_clean_transcription(data, video_path.name, limpia_path)
+        print(f"✅ Transcripción limpia regenerada: {limpia_path.relative_to(video_dir)}")
+        return
+
     # Paso 1: Extraer audio
     extract_audio(video_path, audio_path, dry_run=args.dry_run)
 
@@ -183,7 +316,7 @@ def main():
 
     if data and not args.dry_run:
         output_path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
-        print(f"\n🏁 Transcripción guardada en: {output_path.relative_to(video_dir)}")
+        print(f"\n✅ Transcripción guardada en: {output_path.relative_to(video_dir)}")
 
         # Stats
         duration_s = data.get("duration", 0)
@@ -191,6 +324,11 @@ def main():
             mins = int(duration_s // 60)
             secs = int(duration_s % 60)
             print(f"   ⏱️  Duración: {mins}:{secs:02d}")
+
+        # Generar transcripción limpia
+        limpia_path = transcripcion_dir / "transcription_limpia.md"
+        generate_clean_transcription(data, video_path.name, limpia_path)
+        print(f"✅ Transcripción limpia: {limpia_path.relative_to(video_dir)}")
 
     if args.dry_run:
         print("\n🏁 [DRY RUN] No se ejecutó nada.")
