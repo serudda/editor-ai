@@ -179,7 +179,7 @@ def main():
     parser.add_argument("video_dir", help="Carpeta del video")
     parser.add_argument("--video", default="6_video_limpio_logos.mp4", help="Video de entrada (default: 6_video_limpio_logos.mp4)")
     parser.add_argument("--output", default=None, help="Video de salida")
-    parser.add_argument("--font", default="/System/Library/Fonts/Helvetica.ttc", help="Ruta a la fuente")
+    parser.add_argument("--font", default=os.path.expanduser("~/Documents/Edicion/Serudda/recursos/fuentes/default.ttf"), help="Ruta a la fuente (default: recursos/fuentes/default.ttf)")
     parser.add_argument("--fontsize", type=int, default=64, help="Tamaño de fuente (default: 64)")
     parser.add_argument("--min-duration", type=float, default=0.0, help="Duración mínima en pantalla en segundos (default: 0 = dura lo que la frase)")
     parser.add_argument("--pad-before", type=float, default=0.3, help="Padding antes de la frase (default: 0.3s)")
@@ -316,6 +316,7 @@ def main():
             f"textfile='{card_file}':"
             f"fontcolor=white:fontsize={args.fontsize}:"
             f"x=(w-text_w)/2:y=(h-text_h)/2:"
+            f"text_align=C:"
             f"enable='between(t,{start:.2f},{end:.2f})'"
         )
     
