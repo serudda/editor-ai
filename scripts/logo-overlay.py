@@ -22,13 +22,13 @@ import sys
 
 
 def parse_timestamp(ts):
-    """Convertir MM:SS o H:MM:SS a segundos."""
+    """Convertir MM:SS.xx o H:MM:SS.xx a segundos (con decimales)."""
     parts = ts.strip().split(":")
     if len(parts) == 2:
-        return int(parts[0]) * 60 + int(parts[1])
+        return int(parts[0]) * 60 + float(parts[1])
     elif len(parts) == 3:
-        return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-    return 0
+        return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+    return 0.0
 
 
 def parse_overlay_md(filepath):
@@ -41,7 +41,7 @@ def parse_overlay_md(filepath):
     current_end = None
 
     for line in lines:
-        ts_match = re.match(r'\[(\d+:\d+)\s*-\s*(\d+:\d+)\]', line)
+        ts_match = re.match(r'\[(\d+:\d+(?:\.\d+)?)\s*-\s*(\d+:\d+(?:\.\d+)?)\]', line)
         if ts_match:
             current_start = parse_timestamp(ts_match.group(1))
             current_end = parse_timestamp(ts_match.group(2))
@@ -63,8 +63,11 @@ def parse_overlay_md(filepath):
 
 
 def format_time(seconds):
-    m, s = divmod(int(seconds), 60)
-    return f"{m}:{s:02d}"
+    m, s = divmod(seconds, 60)
+    m = int(m)
+    if s == int(s):
+        return f"{m}:{int(s):02d}"
+    return f"{m}:{s:05.2f}"
 
 
 def main():
@@ -74,6 +77,7 @@ def main():
     parser.add_argument("--output", default=None, help="Video de salida (default: <video>_logos.mp4)")
     parser.add_argument("--size", type=int, default=120, help="Tamaño del logo en px (default: 120)")
     parser.add_argument("--padding", type=int, default=40, help="Padding del borde (default: 40)")
+    parser.add_argument("--position", default="top-left", choices=["top-left", "top-right", "bottom-left", "bottom-right"], help="Posición del logo (default: top-left)")
     parser.add_argument("--fade", type=float, default=0.0, help="[DESACTIVADO] Fade causa logos invisibles en overlays encadenados. Se ignora.")
     parser.add_argument("--crf", type=int, default=18, help="Calidad CRF (default: 18)")
     parser.add_argument("--preset", default="fast", help="Preset de encoding (default: fast)")
@@ -92,11 +96,14 @@ def main():
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(tmp_dir, exist_ok=True)
 
+    video_out_dir = os.path.join(video_dir, "fuente", "video")
     if args.output:
-        output_path = os.path.join(output_dir, args.output)
+        output_path = os.path.join(video_out_dir, args.output)
     else:
-        base = args.video.replace(".mp4", "")
-        output_path = os.path.join(output_dir, f"{base}_logos.mp4")
+        # Siguiente número en la secuencia (0_, 1_, 2_, ...)
+        existing = [f for f in os.listdir(video_out_dir) if re.match(r'^\d+_', f)]
+        next_num = max((int(re.match(r'^(\d+)_', f).group(1)) for f in existing), default=-1) + 1
+        output_path = os.path.join(video_out_dir, f"{next_num}_video_limpio_logos.mp4")
 
     if not os.path.isfile(video_path):
         print(f"❌ Video no encontrado: {video_path}")
@@ -151,7 +158,20 @@ def main():
         sl = f"s{i}"
         vl = f"v{i}"
         y_offset = (args.size + 10) * stack_level
-        pos_y = f"H-{args.size}-{args.padding}" if stack_level == 0 else f"H-{args.size}-{args.padding}-{y_offset}"
+
+        # Posición según --position
+        if args.position == "top-left":
+            pos_x = str(args.padding)
+            pos_y = str(args.padding + y_offset) if stack_level == 0 else f"{args.padding}+{y_offset}"
+        elif args.position == "top-right":
+            pos_x = f"W-{args.size}-{args.padding}"
+            pos_y = str(args.padding + y_offset) if stack_level == 0 else f"{args.padding}+{y_offset}"
+        elif args.position == "bottom-left":
+            pos_x = str(args.padding)
+            pos_y = f"H-{args.size}-{args.padding}" if stack_level == 0 else f"H-{args.size}-{args.padding}-{y_offset}"
+        else:  # bottom-right
+            pos_x = f"W-{args.size}-{args.padding}"
+            pos_y = f"H-{args.size}-{args.padding}" if stack_level == 0 else f"H-{args.size}-{args.padding}-{y_offset}"
 
         # ⚠️ NO usar fade con alpha=1 en overlays encadenados — hace los logos invisibles.
         # Ver 6_logo-overlay.md → "NOTA IMPORTANTE" para detalles.
@@ -160,7 +180,7 @@ def main():
             f"format=rgba[{sl}]"
         )
         filters.append(
-            f"[{chain}][{sl}]overlay=W-{args.size}-{args.padding}:{pos_y}:"
+            f"[{chain}][{sl}]overlay={pos_x}:{pos_y}:"
             f"enable='between(t,{start},{end})'[{vl}]"
         )
         chain = vl
