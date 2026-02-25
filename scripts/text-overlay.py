@@ -348,27 +348,41 @@ def main():
         start = card['start']
         end = card['end']
         
-        # Escribir texto a archivo, escapando % para drawtext
-        card_file = os.path.join(cards_dir, f"card_{idx:03d}.txt")
-        escaped_text = card['display_text'].replace('%', '％')  # fullwidth % (U+FF05) — ffmpeg drawtext trata % como función
-        with open(card_file, 'w') as f:
-            f.write(escaped_text)
-        
         # Fondo negro
         filters.append(
             f"drawbox=x=0:y=0:w=iw:h=ih:color=black:t=fill:"
             f"enable='between(t,{start:.2f},{end:.2f})'"
         )
         
-        # Texto blanco centrado
-        filters.append(
-            f"drawtext=fontfile='{args.font}':"
-            f"textfile='{card_file}':"
-            f"fontcolor=white:fontsize={args.fontsize}:"
-            f"x=(w-text_w)/2:y=(h-text_h)/2:"
-            f"text_align=C:"
-            f"enable='between(t,{start:.2f},{end:.2f})'"
-        )
+        # Dividir texto en líneas para evitar el bug del cuadrito con newlines
+        lines = card['display_text'].split('\n')
+        num_lines = len(lines)
+        line_height = int(args.fontsize * 1.4)  # interlineado ~140%
+        
+        for line_idx, line_text in enumerate(lines):
+            if not line_text.strip():
+                continue
+            
+            # Escapar % para drawtext
+            escaped_line = line_text.replace('%', '％')  # fullwidth % (U+FF05)
+            
+            # Escribir cada línea a su propio archivo
+            card_file = os.path.join(cards_dir, f"card_{idx:03d}_line_{line_idx:02d}.txt")
+            with open(card_file, 'w') as f:
+                f.write(escaped_line)
+            
+            # Calcular Y centrado: el bloque completo se centra, cada línea se offsets
+            # y_centro = (h - alto_total) / 2 + line_idx * line_height
+            total_height = num_lines * line_height
+            y_expr = f"(h-{total_height})/2+{line_idx * line_height}"
+            
+            filters.append(
+                f"drawtext=fontfile='{args.font}':"
+                f"textfile='{card_file}':"
+                f"fontcolor=white:fontsize={args.fontsize}:"
+                f"x=(w-text_w)/2:y={y_expr}:"
+                f"enable='between(t,{start:.2f},{end:.2f})'"
+            )
     
     fc = ','.join(filters)
     
