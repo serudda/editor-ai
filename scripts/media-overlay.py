@@ -41,30 +41,71 @@ def format_time(seconds):
     return f"{m}:{s:05.2f}"
 
 
-def find_word_timestamp(target_word, words, segment_start=None, segment_end=None):
-    """Busca una palabra en la transcripción word-level y retorna (word.start, word.end).
+def find_word_timestamp(target_phrase, words, segment_start=None, segment_end=None):
+    """Busca una palabra o frase en la transcripción word-level y retorna (start, end).
+    
+    Soporta:
+    - Una sola palabra: @"confirmaron" → match fuzzy de la mejor palabra
+    - Frase multi-palabra: @"El 50" → busca palabras consecutivas, retorna start de la primera
     
     Si se proporcionan segment_start/segment_end, limita la búsqueda a ese rango.
     """
-    target_clean = target_word.lower().strip(' .,!?¿¡"\'')
-    
-    best_score = 0
-    best_start = None
-    best_end = None
-    
-    for w in words:
+    # Filtrar palabras al rango del segmento
+    filtered = []
+    for i, w in enumerate(words):
         if segment_start is not None and w['start'] < segment_start - 1.0:
             continue
         if segment_end is not None and w['end'] > segment_end + 1.0:
             continue
+        filtered.append((i, w))
+    
+    if not filtered:
+        return None, None
+    
+    # Tokenizar la frase objetivo
+    target_tokens = re.findall(r'\w+', target_phrase.lower())
+    if not target_tokens:
+        return None, None
+    
+    if len(target_tokens) == 1:
+        # Búsqueda de palabra individual (fuzzy)
+        target_clean = target_tokens[0]
+        best_score = 0
+        best_start = None
+        best_end = None
         
-        word_clean = w['word'].lower().strip(' .,!?¿¡"\'')
-        score = SequenceMatcher(None, target_clean, word_clean).ratio()
+        for _, w in filtered:
+            word_clean = w['word'].lower().strip(' .,!?¿¡"\'')
+            score = SequenceMatcher(None, target_clean, word_clean).ratio()
+            if score > best_score:
+                best_score = score
+                best_start = w['start']
+                best_end = w['end']
         
-        if score > best_score:
-            best_score = score
-            best_start = w['start']
-            best_end = w['end']
+        if best_score < 0.6:
+            return None, None
+        return best_start, best_end
+    
+    # Búsqueda de frase multi-palabra (ventana deslizante)
+    window_size = len(target_tokens)
+    best_score = 0
+    best_start = None
+    best_end = None
+    
+    for i in range(len(filtered) - window_size + 1):
+        window = filtered[i:i + window_size]
+        window_tokens = [w['word'].lower().strip(' .,!?¿¡"\'') for _, w in window]
+        
+        # Score: promedio de similarity por posición
+        total_score = 0
+        for t_tok, w_tok in zip(target_tokens, window_tokens):
+            total_score += SequenceMatcher(None, t_tok, w_tok).ratio()
+        avg_score = total_score / window_size
+        
+        if avg_score > best_score:
+            best_score = avg_score
+            best_start = window[0][1]['start']
+            best_end = window[-1][1]['end']
     
     if best_score < 0.6:
         return None, None
@@ -412,7 +453,7 @@ def main():
         "ffmpeg", "-y",
         *inputs,
         "-filter_complex", filter_complex,
-        "-map", f"{current_stream.strip('[]')}",
+        "-map", current_stream,
         "-map", "0:a",
         "-c:v", "libx264", "-crf", str(args.crf), "-preset", args.preset,
         "-c:a", "copy",

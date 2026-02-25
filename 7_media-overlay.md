@@ -41,7 +41,7 @@ Abre `overlay-media.md` y agrega `>>>` debajo del segmento donde quiere el overl
 **Formato:**
 - `>>>` activa el overlay
 - Primer valor = nombre del archivo en `fuente/overlays/`
-- `@"palabra"` = el overlay aparece cuando se dice esa palabra (timestamp word-level)
+- `@"palabra"` o `@"frase con varias palabras"` = el overlay aparece cuando se dice esa palabra/frase (timestamp word-level). Para frases multi-palabra, el script busca las palabras consecutivas y toma el start de la primera.
 - `| 5s` = duración opcional. **Defaults:**
   - Si es video: duración del video
   - Si es imagen sin duración: hasta el final del segmento
