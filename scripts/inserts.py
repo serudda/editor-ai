@@ -365,9 +365,9 @@ def main():
                 seg_file
             ]
             print(f"✂️  Cortando segmento {idx}: {format_time(prev_cut)} → {format_time(cut_at)} ({duration:.1f}s)")
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd)
             if result.returncode != 0:
-                print(f"❌ Error cortando segmento {idx}:\n{result.stderr[-500:]}")
+                print(f"❌ Error cortando segmento {idx}")
                 sys.exit(1)
             segments.append(seg_file)
         
@@ -399,9 +399,9 @@ def main():
             clip_norm
         ]
         print(f"🎬 Normalizando clip: {ins['clip_file']} ({ins['clip_duration']:.1f}s)")
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd)
         if result.returncode != 0:
-            print(f"❌ Error normalizando clip {ins['clip_file']}:\n{result.stderr[-500:]}")
+            print(f"❌ Error normalizando clip {ins['clip_file']}")
             sys.exit(1)
         segments.append(clip_norm)
         
@@ -419,9 +419,9 @@ def main():
         last_seg
     ]
     print(f"✂️  Cortando segmento final: {format_time(prev_cut)} → final")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd)
     if result.returncode != 0:
-        print(f"❌ Error cortando segmento final:\n{result.stderr[-500:]}")
+        print(f"❌ Error cortando segmento final")
         sys.exit(1)
     segments.append(last_seg)
     
