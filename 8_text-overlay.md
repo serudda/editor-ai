@@ -1,4 +1,4 @@
-# Paso 7 — Text Overlay (Black Cards)
+# Paso 8 — Text Overlay (Black Cards)
 
 **Problema:** En ciertos momentos del video, Sergio quiere interrumpir la imagen con un fondo negro completo y mostrar una frase en texto blanco centrado — estilo Dan Koe. El audio sigue sonando. Funciona especialmente bien con datos duros, afirmaciones fuertes, o frases de impacto.
 
@@ -6,7 +6,7 @@
 
 **Prerequisito:**
 - Paso 5 completado (`transcription_original.json` + `transcription_limpia.md`)
-- Paso 6 completado (`6_video_limpio_logos.mp4` como input)
+- Paso 7 completado (`7_video_media_overlay.mp4` como input)
 - ffmpeg compilado con `--enable-libfreetype` (necesario para `drawtext`)
 
 ---
@@ -78,7 +78,7 @@ python3 scripts/text-overlay.py $VIDEO
 ### 6. 🎬 Sergio revisa
 
 ```bash
-open $VIDEO/fuente/video/7_video_text_overlay.mp4
+open $VIDEO/fuente/video/8_video_text_overlay.mp4
 ```
 
 ---
@@ -171,8 +171,8 @@ Verificar: `ffmpeg -filters 2>/dev/null | grep drawtext`
 
 | Flag | Default | Qué hace |
 |------|---------|----------|
-| `--video` | `6_video_limpio_logos.mp4` | Video de entrada |
-| `--output` | `7_video_text_overlay.mp4` | Video de salida |
+| `--video` | `7_video_media_overlay.mp4` | Video de entrada |
+| `--output` | `8_video_text_overlay.mp4` | Video de salida |
 | `--font` | `recursos/fuentes/default.ttf` | Ruta a la fuente (Source Serif Bold) |
 | `--fontsize` | `64` | Tamaño de fuente en px |
 | `--min-duration` | `0.0` | Segundos mínimos en pantalla |
@@ -194,8 +194,8 @@ $VIDEO/
 │   │   ├── transcription_limpia.md       ← Base legible (Paso 5)
 │   │   └── overlay-text.md               ← Copia de limpia + marcas >>> (Sergio edita)
 │   └── video/
-│       ├── 6_video_limpio_logos.mp4       ← Input (con logos)
-│       └── 7_video_text_overlay.mp4       ← Output
+│       ├── 7_video_media_overlay.mp4      ← Input (con media overlays)
+│       └── 8_video_text_overlay.mp4       ← Output
 └── tmp/
     └── text_cards/
         └── card_NNN.txt                   ← Texto de cada card

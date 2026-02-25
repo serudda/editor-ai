@@ -15,7 +15,9 @@ editor-ai/
 ├── 4_eliminar-silencios.md            ← Paso 4
 ├── 5_generar-transcripcion.md                 ← Paso 5
 ├── 6_logo-overlay.md                  ← Paso 6
-├── 7_text-overlay.md                  ← Paso 7
+├── 7_media-overlay.md                 ← Paso 7
+├── 8_text-overlay.md                  ← Paso 8
+├── 9_inserts.md                       ← Paso 9
 └── scripts/
     ├── sync-audio.py                  ← Script Paso 1
     ├── denoise.py                     ← Script Paso 2
@@ -23,7 +25,9 @@ editor-ai/
     ├── jump-cut.py                    ← Script Paso 4
     ├── transcribe.py                  ← Script Paso 5
     ├── logo-overlay.py               ← Script Paso 6
-    └── text-overlay.py               ← Script Paso 7
+    ├── media-overlay.py              ← Script Paso 7
+    ├── text-overlay.py               ← Script Paso 8
+    └── inserts.py                    ← Script Paso 9
 ```
 
 ## Estructura de cada video
@@ -48,9 +52,14 @@ YYYY-MM-DD_nombre-del-video/
 │   │   ├── transcription_original.json     ← Paso 5: Whisper word-level (FUENTE DE VERDAD, no tocar)
 │   │   ├── transcription_limpia.md         ← Paso 5: Versión legible (BASE para todos los overlays)
 │   │   ├── overlay-logos.md                ← Paso 6: Copia de limpia + detecciones de logos (✅/❌)
-│   │   ├── overlay-text.md                 ← Paso 7: Copia de limpia + marcas de text cards (>>>)
-│   │   ├── overlay-broll.md                ← Paso 8: Copia de limpia + inserciones de B-Roll
-│   │   └── overlay-images.md              ← Futuro: Copia de limpia + imágenes/GIFs
+│   │   ├── overlay-media.md               ← Paso 7: Copia de limpia + media overlays fullscreen (>>>)
+│   │   ├── overlay-text.md                 ← Paso 8: Copia de limpia + marcas de text cards (>>>)
+│   │   └── overlay-inserts.md             ← Paso 9: Copia de limpia + inserciones de clips (>>>)
+│   ├── overlays/                           ← Imágenes/videos que van ENCIMA (Paso 7)
+│   │   ├── ai-timeline.png
+│   │   └── demo.mp4
+│   ├── inserts/                            ← Clips que CORTAN el video (Paso 9)
+│   │   └── sam-altman.mp4
 │   └── logos/                              ← Logos descargados para este video
 │       ├── openai.png
 │       └── ...
@@ -238,9 +247,46 @@ Detecta marcas mencionadas en la transcripción y superpone sus logos.
 
 ---
 
-### Paso 7 — Text Overlay (Black Cards)
+### Paso 7 — Media Overlay
 
-**Doc:** [7_text-overlay.md](7_text-overlay.md) · **Script:** [`scripts/text-overlay.py`](scripts/text-overlay.py)
+**Doc:** [7_media-overlay.md](7_media-overlay.md) · **Script:** [`scripts/media-overlay.py`](scripts/media-overlay.py)
+
+Superpone imágenes o videos fullscreen mientras tu voz sigue sonando. Infografías, screenshots, demos — el visual reemplaza la cámara pero el audio no se interrumpe.
+
+- [ ] 🌑 **Sinistra** corre dry-run — si `overlay-media.md` no existe, se copia automáticamente de `transcription_limpia.md`:
+  ```bash
+  python3 scripts/media-overlay.py $VIDEO --dry-run
+  ```
+- [ ] 🎬 **Sergio** abre `overlay-media.md` y marca medios con `>>>`:
+  ```markdown
+  [4:37.35 - 4:57.15] (19.8s) en 2022 la IA no podía hacer una multiplicación...
+  >>> ai-timeline.png | @"multiplicación" | 19s
+  ```
+  - Archivos en `fuente/overlays/`
+  - `@"palabra"` = aparece cuando se dice esa palabra
+  - Duración opcional (`5s`). Default: hasta fin del segmento (imagen) o duración del clip (video)
+  - Audio del overlay se ignora — tu voz sigue
+- [ ] 🎬 **Sergio** corre el render:
+  ```bash
+  python3 scripts/media-overlay.py $VIDEO
+  ```
+- [ ] 🎬 **Sergio** revisa `fuente/video/7_video_media_overlay.mp4`
+
+**Flags útiles:**
+
+| Flag       | Default                    | Qué hace              |
+| ---------- | -------------------------- | --------------------- |
+| `--video`  | `6_video_limpio_logos.mp4` | Video de entrada      |
+| `--output` | `7_video_media_overlay.mp4`| Video de salida       |
+| `--fade`   | `0.3`                      | Fade in/out (reservado) |
+| `--crf`    | `18`                       | Calidad de video      |
+| `--dry-run`| —                          | Solo muestra detecciones |
+
+---
+
+### Paso 8 — Text Overlay (Black Cards)
+
+**Doc:** [8_text-overlay.md](8_text-overlay.md) · **Script:** [`scripts/text-overlay.py`](scripts/text-overlay.py)
 
 Superpone pantallas negras con texto blanco centrado en momentos clave — estilo Dan Koe. El audio sigue sonando debajo.
 
@@ -272,14 +318,14 @@ Superpone pantallas negras con texto blanco centrado en momentos clave — estil
   ```bash
   python3 scripts/text-overlay.py $VIDEO
   ```
-- [ ] 🎬 **Sergio** revisa `fuente/video/7_video_text_overlay.mp4` — ¿texto legible, bien posicionado, timing correcto?
+- [ ] 🎬 **Sergio** revisa `fuente/video/8_video_text_overlay.mp4` — ¿texto legible, bien posicionado, timing correcto?
 
 **Flags útiles:**
 
 | Flag             | Default                                  | Qué hace                          |
 | ---------------- | ---------------------------------------- | --------------------------------- |
-| `--video`        | `6_video_limpio_logos.mp4`               | Video de entrada                  |
-| `--output`       | `7_video_text_overlay.mp4`               | Video de salida                   |
+| `--video`        | `7_video_media_overlay.mp4`              | Video de entrada                  |
+| `--output`       | `8_video_text_overlay.mp4`               | Video de salida                   |
 | `--font`         | `recursos/fuentes/default.ttf`           | Ruta a la fuente (Source Serif Bold) |
 | `--fontsize`     | `64`                                     | Tamaño de fuente en px            |
 | `--min-duration` | `3.0`                                    | Segundos mínimos en pantalla      |
@@ -288,13 +334,47 @@ Superpone pantallas negras con texto blanco centrado en momentos clave — estil
 | `--crf`          | `18`                                     | Calidad de video (menor = mejor)  |
 | `--dry-run`      | —                                        | Solo muestra detecciones          |
 
-**⚠️ Cuidado con caracteres especiales:** El script escapa `%` automáticamente (`\%` para ffmpeg). Si ves pantalla negra sin texto, revisar que no haya un carácter sin escapar. Ver la doc completa en `7_text-overlay.md` → sección "Bugs conocidos".
+**⚠️ Cuidado con caracteres especiales:** El script escapa `%` automáticamente (`\%` para ffmpeg). Si ves pantalla negra sin texto, revisar que no haya un carácter sin escapar. Ver la doc completa en `8_text-overlay.md` → sección "Bugs conocidos".
+
+---
+
+### Paso 9 — Inserts
+
+**Doc:** [9_inserts.md](9_inserts.md) · **Script:** [`scripts/inserts.py`](scripts/inserts.py)
+
+Corta el video en puntos específicos e inserta clips completos (con su audio). El video resultante es más largo. **Va al final del pipeline** porque modifica la duración — si fuera antes, todos los timestamps de los overlays se descuadrarían.
+
+- [ ] 🌑 **Sinistra** corre dry-run — si `overlay-inserts.md` no existe, se copia automáticamente de `transcription_limpia.md`:
+  ```bash
+  python3 scripts/inserts.py $VIDEO --dry-run
+  ```
+- [ ] 🎬 **Sergio** abre `overlay-inserts.md` y marca inserciones con `>>>`:
+  ```markdown
+  [0:32.96 - 0:34.72] (1.8s) Porque me estaba volviendo obsoleto.
+  >>> sam-altman.mp4 | @"obsoleto"
+  ```
+  - Clips en `fuente/inserts/` (entran completos con su audio)
+  - `@"palabra"` = se inserta DESPUÉS de esa palabra
+- [ ] 🎬 **Sergio** corre el render:
+  ```bash
+  python3 scripts/inserts.py $VIDEO
+  ```
+- [ ] 🎬 **Sergio** revisa `fuente/video/9_video_inserts.mp4`
+
+**Flags útiles:**
+
+| Flag       | Default                     | Qué hace              |
+| ---------- | --------------------------- | --------------------- |
+| `--video`  | `8_video_text_overlay.mp4`  | Video de entrada      |
+| `--output` | `9_video_inserts.mp4`       | Video de salida       |
+| `--crf`    | `18`                        | Calidad de video      |
+| `--dry-run`| —                           | Solo muestra detecciones |
 
 ---
 
 ## Dependencias
 
-- `ffmpeg` + `ffprobe` — procesamiento de audio/video (⚠️ Paso 7 requiere `drawtext`: instalar desde `homebrew-ffmpeg/ffmpeg` tap, no el estándar)
+- `ffmpeg` + `ffprobe` — procesamiento de audio/video (⚠️ Paso 8 requiere `drawtext`: instalar desde `homebrew-ffmpeg/ffmpeg` tap, no el estándar)
 - `python3` — scripts de automatización
 - `numpy` + `scipy` — cross-correlation (Paso 1)
 - `rsvg-convert` — conversión SVG → PNG (`brew install librsvg`)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Paso 7 — Text Overlay (Black Card)
+Paso 8 — Text Overlay (Black Card)
 
 Lee `fuente/transcription/overlay-text.md` del folder del video para saber
 qué frases mostrar como text cards (fondo negro + texto blanco centrado).
@@ -11,7 +11,7 @@ Uso:
   python3 text-overlay.py <carpeta-del-video>
   python3 text-overlay.py <carpeta-del-video> --dry-run
 
-Documentación completa: ../7_text-overlay.md
+Documentación completa: ../8_text-overlay.md
 """
 
 import argparse
@@ -172,9 +172,9 @@ def escape_drawtext(text):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Paso 7 — Text Overlay (Black Card)")
+    parser = argparse.ArgumentParser(description="Paso 8 — Text Overlay (Black Card)")
     parser.add_argument("video_dir", help="Carpeta del video")
-    parser.add_argument("--video", default="6_video_limpio_logos.mp4", help="Video de entrada (default: 6_video_limpio_logos.mp4)")
+    parser.add_argument("--video", default="7_video_media_overlay.mp4", help="Video de entrada (default: 7_video_media_overlay.mp4)")
     parser.add_argument("--output", default=None, help="Video de salida")
     parser.add_argument("--font", default=os.path.expanduser("~/Documents/Edicion/Serudda/recursos/fuentes/default.ttf"), help="Ruta a la fuente (default: recursos/fuentes/default.ttf)")
     parser.add_argument("--fontsize", type=int, default=48, help="Tamaño de fuente (default: 48)")
@@ -199,7 +199,7 @@ def main():
     if args.output:
         output_path = os.path.join(video_out_dir, args.output)
     else:
-        output_path = os.path.join(video_out_dir, "7_video_text_overlay.mp4")
+        output_path = os.path.join(video_out_dir, "8_video_text_overlay.mp4")
     
     if not os.path.isfile(video_path):
         print(f"❌ Video no encontrado: {video_path}")

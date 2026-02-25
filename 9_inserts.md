@@ -1,29 +1,29 @@
-# Paso 8 — Insert B-Roll
+# Paso 9 — Inserts
 
-**Problema:** En ciertos momentos del video, Sergio quiere insertar clips de B-Roll (con su propio audio) que cortan el video principal. El resultado es un video más largo donde el B-Roll entra como un segmento independiente. Hacerlo manualmente en DaVinci implica partir el timeline, arrastrar clips, alinear — repetir × N.
+**Problema:** En ciertos momentos del video, Sergio quiere insertar clips (con su propio audio) que cortan el video principal. El resultado es un video más largo donde el clip entra como un segmento independiente. Hacerlo manualmente en DaVinci implica partir el timeline, arrastrar clips, alinear — repetir × N.
 
-**Razonamiento:** El script lee `overlay-insert-broll.md` donde Sergio marca en qué palabra exacta se inserta cada B-Roll. El script calcula el timestamp word-level de esa palabra, corta el video base en ese punto, inserta el clip de B-Roll completo (con su audio), y retoma el video base donde lo dejó.
+**Razonamiento:** El script lee `overlay-inserts.md` donde Sergio marca en qué palabra exacta se inserta cada clip. El script calcula el timestamp word-level de esa palabra, corta el video base en ese punto, inserta el clip completo (con su audio), y retoma el video base donde lo dejó.
 
 **Prerequisito:**
 - Paso 5 completado (`transcription_original.json` + `transcription_limpia.md`)
-- Paso 7 completado (`7_video_text_overlay.mp4` como input)
-- Clips de B-Roll editados y listos en `fuente/broll/`
+- Paso 8 completado (`8_video_text_overlay.mp4` como input)
+- Clips editados y listos en `fuente/inserts/`
 
 ---
 
 ## Flujo completo
 
-### 1. 🌑 `overlay-insert-broll.md` se crea automáticamente
+### 1. 🌑 `overlay-inserts.md` se crea automáticamente
 
-Al correr `insert-broll.py --dry-run`, si `overlay-insert-broll.md` no existe, el script lo copia de `transcription_limpia.md` y le agrega instrucciones.
+Al correr `inserts.py --dry-run`, si `overlay-inserts.md` no existe, el script lo copia de `transcription_limpia.md` y le agrega instrucciones.
 
 ```bash
-python3 scripts/insert-broll.py $VIDEO --dry-run
+python3 scripts/inserts.py $VIDEO --dry-run
 ```
 
 ### 2. 🎬 Sergio marca puntos de inserción con `>>>`
 
-Abre `overlay-insert-broll.md` y agrega `>>>` debajo del segmento donde quiere insertar el B-Roll:
+Abre `overlay-inserts.md` y agrega `>>>` debajo del segmento donde quiere insertar el clip:
 
 ```markdown
 [0:32.96 - 0:34.72] (1.8s) Porque me estaba volviendo obsoleto.
@@ -31,30 +31,30 @@ Abre `overlay-insert-broll.md` y agrega `>>>` debajo del segmento donde quiere i
 ```
 
 **Reglas del marcado:**
-- `>>>` activa la inserción de B-Roll
-- Primer valor = nombre del archivo en `fuente/broll/` (ej: `sam-altman.mp4`)
-- `@"palabra"` = el B-Roll se inserta **después** de esa palabra
+- `>>>` activa la inserción del clip
+- Primer valor = nombre del archivo en `fuente/inserts/` (ej: `sam-altman.mp4`)
+- `@"palabra"` = el clip se inserta **después** de esa palabra
 - El script busca la palabra en la transcripción word-level para el timestamp exacto
-- El clip de B-Roll entra completo (no se recorta). Si Sergio quiere solo una parte, lo edita antes de ponerlo en `fuente/broll/`
+- El clip entra completo (no se recorta). Si Sergio quiere solo una parte, lo edita antes de ponerlo en `fuente/inserts/`
 
 ### 3. 🌑 Sinistra corre dry-run
 
 ```bash
-python3 scripts/insert-broll.py $VIDEO --dry-run
+python3 scripts/inserts.py $VIDEO --dry-run
 ```
 
-Verificar: timestamps correctos, archivos de B-Roll encontrados, orden de inserción.
+Verificar: timestamps correctos, archivos encontrados, orden de inserción.
 
 ### 4. 🎬 Sergio corre el render
 
 ```bash
-python3 scripts/insert-broll.py $VIDEO
+python3 scripts/inserts.py $VIDEO
 ```
 
 ### 5. 🎬 Sergio revisa
 
 ```bash
-open $VIDEO/fuente/video/8_video_insert_broll.mp4
+open $VIDEO/fuente/video/9_video_inserts.mp4
 ```
 
 ---
@@ -86,6 +86,8 @@ Resultado:  [====A====][---BROLL---][====B====]
 
 [1:15.16 - 1:21.76] (6.5s) Esto no es un framework nuevo, esto no es una tendencia.
 >>> demo-cursor.mp4 | @"tendencia"
+
+(Los clips deben estar en `fuente/inserts/`)
 ```
 
 El script las procesa en orden cronológico. No importa en qué orden aparezcan en el archivo.
@@ -124,13 +126,13 @@ Para que el concat funcione sin problemas, cada B-Roll se re-encodea para coinci
 
 ## ⚠️ Bugs conocidos
 
-### 1. B-Roll sin audio rompe la concatenación (Resuelto)
+### 1. Clip sin audio rompe la concatenación (Resuelto)
 
-Si un clip de B-Roll no tiene stream de audio, el `concat demuxer` de ffmpeg pierde el audio de los segmentos siguientes del video base. El video se genera sin errores pero el audio desaparece después del primer B-Roll sin audio.
+Si un clip no tiene stream de audio, el `concat demuxer` de ffmpeg pierde el audio de los segmentos siguientes del video base. El video se genera sin errores pero el audio desaparece después del primer clip sin audio.
 
 **Causa:** `ffmpeg -f concat` requiere que todos los segmentos tengan la misma estructura de streams (video + audio). Si un segmento no tiene audio, el concat se desincroniza.
 
-**Solución:** El script detecta si el B-Roll tiene audio con `ffprobe`. Si no tiene, agrega un input de silencio (`anullsrc`) con `-shortest` para generar un track de audio silencioso que coincida con la duración del video. Así todos los segmentos tienen video + audio y el concat funciona correctamente.
+**Solución:** El script detecta si el clip tiene audio con `ffprobe`. Si no tiene, agrega un input de silencio (`anullsrc`) con `-shortest` para generar un track de audio silencioso que coincida con la duración del video. Así todos los segmentos tienen video + audio y el concat funciona correctamente.
 
 ---
 
@@ -138,8 +140,8 @@ Si un clip de B-Roll no tiene stream de audio, el `concat demuxer` de ffmpeg pie
 
 | Flag | Default | Qué hace |
 |------|---------|----------|
-| `--video` | `7_video_text_overlay.mp4` | Video de entrada |
-| `--output` | `8_video_insert_broll.mp4` | Video de salida |
+| `--video` | `8_video_text_overlay.mp4` | Video de entrada |
+| `--output` | `9_video_inserts.mp4` | Video de salida |
 | `--crf` | `18` | Calidad de video |
 | `--preset` | `fast` | Preset de encoding |
 | `--dry-run` | — | Solo muestra detecciones |
@@ -151,20 +153,20 @@ Si un clip de B-Roll no tiene stream de audio, el `concat demuxer` de ffmpeg pie
 ```
 $VIDEO/
 ├── fuente/
-│   ├── broll/
-│   │   ├── sam-altman.mp4                ← Clips de B-Roll (editados y listos)
+│   ├── inserts/
+│   │   ├── sam-altman.mp4                ← Clips que se insertan (editados y listos)
 │   │   └── demo-cursor.mp4
 │   ├── transcription/
 │   │   ├── transcription_original.json   ← Word-level Whisper (Paso 5)
 │   │   ├── transcription_limpia.md       ← Base legible (Paso 5)
-│   │   └── overlay-insert-broll.md       ← Copia de limpia + marcas >>> (Sergio edita)
+│   │   └── overlay-inserts.md            ← Copia de limpia + marcas >>> (Sergio edita)
 │   └── video/
-│       ├── 7_video_text_overlay.mp4      ← Input (con text overlays)
-│       └── 8_video_insert_broll.mp4      ← Output
+│       ├── 8_video_text_overlay.mp4      ← Input (con text overlays)
+│       └── 9_video_inserts.mp4           ← Output
 └── tmp/
-    └── insert_broll/
+    └── inserts/
         ├── segment_000.mp4               ← Segmentos del video base
-        ├── broll_000.mp4                 ← B-Roll normalizado
+        ├── insert_000.mp4                ← Clip normalizado
         └── concat_list.txt               ← Lista para ffmpeg concat
 ```
 

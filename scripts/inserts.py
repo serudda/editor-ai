@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Paso 8 — Insert B-Roll
+Paso 9 — Inserts
 
-Lee `fuente/transcription/overlay-insert-broll.md` del folder del video para saber
-dónde insertar clips de B-Roll. Corta el video base en esos puntos, inserta los
-B-Roll clips completos (con su audio), y concatena todo.
+Lee `fuente/transcription/overlay-inserts.md` del folder del video para saber
+dónde insertar clips. Corta el video base en esos puntos, inserta los
+clips completos (con su audio), y concatena todo.
 
 Requiere ffmpeg.
 
 Uso:
-  python3 insert-broll.py <carpeta-del-video>
-  python3 insert-broll.py <carpeta-del-video> --dry-run
+  python3 inserts.py <carpeta-del-video>
+  python3 inserts.py <carpeta-del-video> --dry-run
 
-Documentación completa: ../8_insert-broll.md
+Documentación completa: ../9_inserts.md
 """
 
 import argparse
@@ -81,8 +81,8 @@ def find_word_end_timestamp(target_word, words, segment_start=None, segment_end=
     return best_end
 
 
-def parse_overlay_insert_broll_md(filepath):
-    """Parsear overlay-insert-broll.md y extraer inserciones marcadas con >>>."""
+def parse_overlay_inserts_md(filepath):
+    """Parsear overlay-inserts.md y extraer inserciones marcadas con >>>."""
     with open(filepath, 'r') as f:
         lines = f.readlines()
     
@@ -120,7 +120,7 @@ def parse_overlay_insert_broll_md(filepath):
                 print(f"⚠️  Línea {i+1}: formato incorrecto, se espera 'archivo.mp4 | @\"palabra\"'")
                 continue
             
-            broll_file = parts[0]
+            clip_file = parts[0]
             
             # Extraer palabra del @"..."
             word_match = re.match(r'@["\u201c](.+?)["\u201d]', parts[1])
@@ -131,7 +131,7 @@ def parse_overlay_insert_broll_md(filepath):
             target_word = word_match.group(1)
             
             inserts.append({
-                'broll_file': broll_file,
+                'clip_file': clip_file,
                 'target_word': target_word,
                 'segment_text': current_segment_text,
                 'segment_start': current_start,
@@ -184,10 +184,10 @@ def get_video_info(video_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Paso 8 — Insert B-Roll")
+    parser = argparse.ArgumentParser(description="Paso 9 — Inserts")
     parser.add_argument("video_dir", help="Carpeta del video")
-    parser.add_argument("--video", default="7_video_text_overlay.mp4", help="Video de entrada")
-    parser.add_argument("--output", default="8_video_insert_broll.mp4", help="Video de salida")
+    parser.add_argument("--video", default="8_video_text_overlay.mp4", help="Video de entrada")
+    parser.add_argument("--output", default="9_video_inserts.mp4", help="Video de salida")
     parser.add_argument("--crf", type=int, default=18, help="Calidad CRF (default: 18)")
     parser.add_argument("--preset", default="fast", help="Preset de encoding (default: fast)")
     parser.add_argument("--dry-run", action="store_true", help="Solo mostrar detecciones")
@@ -196,11 +196,11 @@ def main():
     
     video_dir = os.path.expanduser(args.video_dir)
     video_path = os.path.join(video_dir, "fuente", "video", args.video)
-    overlay_md = os.path.join(video_dir, "fuente", "transcription", "overlay-insert-broll.md")
+    overlay_md = os.path.join(video_dir, "fuente", "transcription", "overlay-inserts.md")
     transcription_json = os.path.join(video_dir, "fuente", "transcription", "transcription_original.json")
-    broll_dir = os.path.join(video_dir, "fuente", "broll")
+    clips_dir = os.path.join(video_dir, "fuente", "inserts")
     output_path = os.path.join(video_dir, "fuente", "video", args.output)
-    tmp_dir = os.path.join(video_dir, "tmp", "insert_broll")
+    tmp_dir = os.path.join(video_dir, "tmp", "inserts")
     
     os.makedirs(tmp_dir, exist_ok=True)
     
@@ -212,19 +212,19 @@ def main():
         # Crear desde transcription_limpia.md
         limpia_md = os.path.join(video_dir, "fuente", "transcription", "transcription_limpia.md")
         if os.path.isfile(limpia_md):
-            header = """# Insert B-Roll
+            header = """# Inserts
 #
 # Copiado de transcription_limpia.md — marca puntos de inserción con >>>.
 #
 # INSTRUCCIONES:
-# Para insertar un B-Roll, agrega >>> debajo del segmento.
+# Para insertar un clip, agrega >>> debajo del segmento.
 # Formato: >>> archivo.mp4 | @"palabra"
 #
-# - archivo.mp4 = clip en fuente/broll/ (entra completo, con su audio)
-# - @"palabra" = el B-Roll se inserta DESPUÉS de esa palabra
+# - archivo.mp4 = clip en fuente/inserts/ (entra completo, con su audio)
+# - @"palabra" = el clip se inserta DESPUÉS de esa palabra
 #
 # El script busca la palabra en la transcripción word-level para el timestamp exacto.
-# El clip de B-Roll entra completo. Si solo quieres una parte, editalo antes.
+# El clip entra completo. Si solo quieres una parte, editalo antes.
 #
 # Ejemplo:
 # [0:32.96 - 0:34.72] (1.8s) Porque me estaba volviendo obsoleto.
@@ -248,12 +248,12 @@ def main():
                 f.write(header)
                 f.writelines(content_lines)
             
-            print(f"📋 overlay-insert-broll.md creado desde transcription_limpia.md")
+            print(f"📋 overlay-inserts.md creado desde transcription_limpia.md")
             print(f"   → Abrilo y marcá puntos de inserción con >>> antes de renderizar\n")
             if args.dry_run:
                 return
         else:
-            print(f"❌ No existe overlay-insert-broll.md ni transcription_limpia.md")
+            print(f"❌ No existe overlay-inserts.md ni transcription_limpia.md")
             sys.exit(1)
     
     if not os.path.isfile(transcription_json):
@@ -266,12 +266,12 @@ def main():
     words = transcription.get('words', [])
     
     # Parsear marcas
-    inserts = parse_overlay_insert_broll_md(overlay_md)
+    inserts = parse_overlay_inserts_md(overlay_md)
     
     print(f"📹 Video: {video_path}")
     print(f"📋 Overlay: {overlay_md}")
     print(f"📤 Output: {output_path}")
-    print(f"🎬 B-Roll dir: {broll_dir}")
+    print(f"🎬 Inserts dir: {clips_dir}")
     print(f"\n📊 {len(inserts)} inserciones encontradas\n")
     
     if not inserts:
@@ -295,45 +295,45 @@ def main():
             ins['source'] = 'segment fallback'
             print(f"⚠️  Línea {ins['line_num']}: palabra \"{ins['target_word']}\" no encontrada en word-level, usando final del segmento")
         
-        # Verificar que el B-Roll existe
-        broll_path = os.path.join(broll_dir, ins['broll_file'])
-        if os.path.isfile(broll_path):
-            ins['broll_path'] = broll_path
-            # Obtener duración del B-Roll
+        # Verificar que el clip existe
+        clip_path = os.path.join(clips_dir, ins['clip_file'])
+        if os.path.isfile(clip_path):
+            ins['clip_path'] = clip_path
+            # Obtener duración del clip
             probe_cmd = [
                 "ffprobe", "-v", "quiet", "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1", broll_path
+                "-of", "default=noprint_wrappers=1:nokey=1", clip_path
             ]
             result = subprocess.run(probe_cmd, capture_output=True, text=True)
-            ins['broll_duration'] = float(result.stdout.strip())
+            ins['clip_duration'] = float(result.stdout.strip())
         else:
-            ins['broll_path'] = None
-            ins['broll_duration'] = 0
-            print(f"❌ Línea {ins['line_num']}: B-Roll no encontrado: {broll_path}")
+            ins['clip_path'] = None
+            ins['clip_duration'] = 0
+            print(f"❌ Línea {ins['line_num']}: Clip no encontrado: {clip_path}")
     
     # Ordenar por timestamp de corte
     inserts.sort(key=lambda x: x['cut_at'])
     
     # Mostrar resumen
-    total_broll_duration = 0
+    total_clip_duration = 0
     all_valid = True
     for ins in inserts:
-        status = "✅" if ins['broll_path'] else "❌"
+        status = "✅" if ins['clip_path'] else "❌"
         print(f"   {status} [{format_time(ins['cut_at'])}] después de \"{ins['target_word']}\" [{ins['source']}]")
-        print(f"      → {ins['broll_file']} ({ins['broll_duration']:.1f}s)")
+        print(f"      → {ins['clip_file']} ({ins['clip_duration']:.1f}s)")
         print()
-        total_broll_duration += ins['broll_duration']
-        if not ins['broll_path']:
+        total_clip_duration += ins['clip_duration']
+        if not ins['clip_path']:
             all_valid = False
     
-    print(f"📊 Duración total de B-Roll a insertar: {total_broll_duration:.1f}s")
+    print(f"📊 Duración total de clips a insertar: {total_clip_duration:.1f}s")
     
     if args.dry_run:
         print("\n🏁 Dry run — no se generó video.")
         return
     
     if not all_valid:
-        print("\n❌ Hay B-Roll clips faltantes. Corrige antes de renderizar.")
+        print("\n❌ Hay clips faltantes. Corrige antes de renderizar.")
         sys.exit(1)
     
     # Obtener info del video base
@@ -371,18 +371,18 @@ def main():
                 sys.exit(1)
             segments.append(seg_file)
         
-        # Normalizar B-Roll
-        # Detectar si el B-Roll tiene audio
+        # Normalizar clip
+        # Detectar si el clip tiene audio
         probe_audio = subprocess.run(
             ["ffprobe", "-v", "quiet", "-select_streams", "a",
              "-show_entries", "stream=codec_type", "-of", "csv=p=0",
-             ins['broll_path']],
+             ins['clip_path']],
             capture_output=True, text=True
         )
         has_audio = bool(probe_audio.stdout.strip())
         
-        broll_norm = os.path.join(tmp_dir, f"broll_{idx:03d}.mp4")
-        cmd = ["ffmpeg", "-y", "-i", ins['broll_path']]
+        clip_norm = os.path.join(tmp_dir, f"insert_{idx:03d}.mp4")
+        cmd = ["ffmpeg", "-y", "-i", ins['clip_path']]
         
         # Si no tiene audio, generar silencio
         if not has_audio:
@@ -396,14 +396,14 @@ def main():
             "-c:a", "aac", "-ar", str(base_info['sample_rate']),
             "-ac", str(base_info['channels']),
             "-video_track_timescale", "15360",
-            broll_norm
+            clip_norm
         ]
-        print(f"🎬 Normalizando B-Roll: {ins['broll_file']} ({ins['broll_duration']:.1f}s)")
+        print(f"🎬 Normalizando clip: {ins['clip_file']} ({ins['clip_duration']:.1f}s)")
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            print(f"❌ Error normalizando B-Roll {ins['broll_file']}:\n{result.stderr[-500:]}")
+            print(f"❌ Error normalizando clip {ins['clip_file']}:\n{result.stderr[-500:]}")
             sys.exit(1)
-        segments.append(broll_norm)
+        segments.append(clip_norm)
         
         prev_cut = cut_at
     
