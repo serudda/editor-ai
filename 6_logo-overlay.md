@@ -135,7 +135,7 @@ python3 scripts/logo-overlay.py $VIDEO
 python3 scripts/logo-overlay.py $VIDEO
 
 # Personalizar
-python3 scripts/logo-overlay.py $VIDEO --size 150 --padding 50
+python3 scripts/logo-overlay.py $VIDEO --size 250 --padding-x 160 --padding-y 80
 ```
 
 | Flag | Default | Qué hace |
